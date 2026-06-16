@@ -3,7 +3,6 @@ Halaman Checker Upload (Step 1).
 
 Layout full-viewport, non-scrollable.
 Tombol START ANALYSIS selalu visible (disabled saat belum ada file).
-Progress bar muncul di placeholder terpisah saat analisis berjalan.
 """
 
 import time
@@ -11,10 +10,11 @@ from pathlib import PurePosixPath
 
 import streamlit as st
 
-from services.extractor    import ZipExtractorService
-from services.fingerprint  import FingerprintService
-from services.preprocessor import PreprocessorService
-from services.similarity   import SimilarityService
+from components.step_indicator import render_step_indicator
+from services.extractor        import ZipExtractorService
+from services.fingerprint      import FingerprintService
+from services.preprocessor     import PreprocessorService
+from services.similarity       import SimilarityService
 
 ROUTE_COMPARISONS = "checker_comparisons"
 
@@ -51,7 +51,7 @@ div[data-testid="stButton"] > button:disabled {
 
 def render(navigate_to, reset_analysis) -> None:
     """Render halaman Upload."""
-    _render_step_indicator(current_step=1)
+    render_step_indicator(current_step=1)
     st.markdown(_UPLOAD_CSS, unsafe_allow_html=True)
     st.markdown("<div style='padding-top:1.5rem;'></div>", unsafe_allow_html=True)
 
@@ -121,8 +121,9 @@ def _render_upload_card(navigate_to, reset_analysis) -> None:
 
 def _run_analysis_pipeline(zip_bytes: bytes, navigate_to, progress_placeholder) -> None:
     """
-    Jalankan pipeline analisis lengkap: Extraction → Preprocessing → Fingerprinting → Jaccard.
+    Jalankan pipeline analisis lengkap.
 
+    Tahap: Extraction → Preprocessing → Fingerprinting → Jaccard.
     Semua hasil disimpan ke st.session_state (volatile, tidak ditulis ke disk).
     """
     with progress_placeholder.container():
@@ -130,12 +131,10 @@ def _run_analysis_pipeline(zip_bytes: bytes, navigate_to, progress_placeholder) 
 
         try:
             _run_pipeline_steps(zip_bytes, navigate_to, progress_bar)
-
         except ValueError as exc:
             progress_bar.empty()
             st.session_state["upload_error"] = str(exc)
             st.error(f"❌ {exc}")
-
         except (OSError, MemoryError, RuntimeError) as exc:
             progress_bar.empty()
             msg = f"Kesalahan sistem: {type(exc).__name__}: {exc}"
@@ -145,16 +144,16 @@ def _run_analysis_pipeline(zip_bytes: bytes, navigate_to, progress_placeholder) 
 
 def _run_pipeline_steps(zip_bytes: bytes, navigate_to, progress_bar) -> None:
     """Eksekusi setiap tahap pipeline dan perbarui progress bar."""
-    # ── Tahap 1: Ekstraksi ────────────────────────────────────────────────────
     progress_bar.progress(10, text="📦 Mengekstrak arsip .zip...")
-    extractor    = ZipExtractorService(zip_bytes)
-    projects_raw = extractor.extract()
+    extractor      = ZipExtractorService(zip_bytes)
+    projects_raw   = extractor.extract()
     total_projects = len(projects_raw)
     total_files    = sum(len(f) for f in projects_raw.values())
     st.session_state["projects_raw"] = projects_raw
-    progress_bar.progress(25, text=f"✅ {total_projects} project, {total_files} file ditemukan")
+    progress_bar.progress(
+        25, text=f"✅ {total_projects} project, {total_files} file ditemukan"
+    )
 
-    # ── Tahap 2: Preprocessing ────────────────────────────────────────────────
     progress_bar.progress(30, text="🔧 Preprocessing source code...")
     preprocessor          = PreprocessorService()
     projects_preprocessed = {}
@@ -166,12 +165,11 @@ def _run_pipeline_steps(zip_bytes: bytes, navigate_to, progress_bar) -> None:
             try:
                 projects_preprocessed[proj][fname] = preprocessor.preprocess(code, ext)
             except ValueError:
-                pass  # lewati file dengan ekstensi tidak dikenal
+                pass
 
     st.session_state["projects_preprocessed"] = projects_preprocessed
     progress_bar.progress(50, text="✅ Preprocessing selesai")
 
-    # ── Tahap 3: Fingerprinting ───────────────────────────────────────────────
     progress_bar.progress(55, text="🔑 Menghitung fingerprint (Rabin-Karp + Winnowing)...")
     fp_service       = FingerprintService()
     fingerprint_data = {}
@@ -181,14 +179,12 @@ def _run_pipeline_steps(zip_bytes: bytes, navigate_to, progress_bar) -> None:
         for fname, prep in files.items():
             fingerprint_data[proj][fname] = fp_service.compute(
                 processed_text=prep.processed,
-                original_text=prep.original,
                 char_map=prep.char_map,
             )
 
     st.session_state["fingerprint_data"] = fingerprint_data
     progress_bar.progress(75, text="✅ Fingerprint diekstrak")
 
-    # ── Tahap 4: Jaccard Similarity ───────────────────────────────────────────
     progress_bar.progress(80, text="📊 Menghitung Jaccard Similarity...")
     sim_service        = SimilarityService()
     comparison_results = sim_service.compute_all(fingerprint_data)
@@ -199,43 +195,8 @@ def _run_pipeline_steps(zip_bytes: bytes, navigate_to, progress_bar) -> None:
         100, text=f"✅ Selesai — {total_pairs} pasangan ditemukan"
     )
     st.success(
-        f"🎉 Analisis selesai! **{total_pairs} pasangan** dari **{total_projects} project**."
+        f"🎉 Analisis selesai! **{total_pairs} pasangan** "
+        f"dari **{total_projects} project**."
     )
-
     time.sleep(0.8)
     navigate_to(ROUTE_COMPARISONS)
-
-
-def _render_step_indicator(current_step: int) -> None:
-    """Render breadcrumb step indicator wizard di atas halaman."""
-    steps = [
-        (1, "Upload"),
-        (2, "Comparisons"),
-        (3, "Result"),
-        (4, "Detail"),
-    ]
-    parts = []
-    for step_num, label in steps:
-        if step_num == current_step:
-            span = (
-                f'<span style="color:#E87722;font-weight:700;">'
-                f'Step {step_num}: {label}</span>'
-            )
-        elif step_num < current_step:
-            span = (
-                f'<span style="color:#BBBBBB;text-decoration:line-through;">'
-                f'Step {step_num}: {label}</span>'
-            )
-        else:
-            span = (
-                f'<span style="color:#CCCCCC;">'
-                f'Step {step_num}: {label}</span>'
-            )
-        parts.append(span)
-
-    separator = ' <span style="color:#CCCCCC;margin:0 0.4rem;">›</span> '
-    st.markdown(
-        f'<div style="text-align:center;font-size:0.88rem;padding:0.4rem 0;">'
-        f'{separator.join(parts)}</div>',
-        unsafe_allow_html=True,
-    )
