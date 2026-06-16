@@ -10,13 +10,10 @@ Pipeline fingerprinting tiga tahap:
 Rolling Hash Rabin-Karp STANDAR:
     H[0] = poly_hash(text[0:k])
     H[i] = (H[i-1] - text[i-1]*BASE^(k-1)) * BASE + text[i+k-1]  mod MOD
-
-    Karakter masuk  = text[i+k-1]  ← posisi baru yang belum pernah masuk
-    Karakter keluar = text[i-1]    ← posisi lama yang keluar dari window
     Properti: H[i] == poly_hash(text[i:i+k]) untuk semua i.
 
-Memanfaatkan char_map dari PreprocessedFile untuk memetakan posisi k-gram
-di processed_text langsung ke posisi di original_text secara akurat 100%.
+Menggunakan char_map dari PreprocessorService untuk memetakan posisi
+k-gram di processed_text ke posisi di original_text secara akurat 100%.
 """
 
 from dataclasses import dataclass
@@ -59,12 +56,9 @@ class FingerprintService:
         self.mod  = mod
         self._bk1 = pow(base, k - 1, mod)
 
-    # ── Public API ────────────────────────────────────────────────────────────
-
     def compute(
         self,
         processed_text: str,
-        original_text: str,
         char_map: list,
     ) -> FingerprintResult:
         """
@@ -72,7 +66,6 @@ class FingerprintService:
 
         Args:
             processed_text: Output PreprocessorService.processed.
-            original_text:  Output PreprocessorService.original.
             char_map:       Output PreprocessorService.char_map.
 
         Returns:
@@ -81,7 +74,7 @@ class FingerprintService:
         if len(processed_text) < self.k:
             return FingerprintResult(fingerprints=set(), hash_positions=[])
 
-        kgrams = self._rolling_hash(processed_text)
+        kgrams = self.rolling_hash(processed_text)
         if not kgrams:
             return FingerprintResult(fingerprints=set(), hash_positions=[])
 
@@ -94,12 +87,13 @@ class FingerprintService:
             hash_positions=hash_positions,
         )
 
-    # ── Rolling Hash Rabin-Karp STANDAR ───────────────────────────────────────
-
-    def _rolling_hash(self, text: str) -> list:
+    def rolling_hash(self, text: str) -> list:
         """
         Kembalikan [(hash_value, start_idx), ...] untuk setiap k-gram.
-        H[i] == poly_hash(text[i:i+k]) untuk semua i.
+
+        Menggunakan Rolling Hash Rabin-Karp standar:
+            H[i] = (H[i-1] - text[i-1]*BASE^(k-1)) * BASE + text[i+k-1]
+        H[i] identik dengan poly_hash(text[i:i+k]) untuk semua i.
         """
         text_len  = len(text)
         kgram_len = self.k
@@ -125,12 +119,10 @@ class FingerprintService:
 
         return result
 
-    # ── Winnowing ─────────────────────────────────────────────────────────────
-
     def _winnow(self, kgrams: list) -> list:
         """
         Pilih minimum rightmost tiap window ukuran w.
-        Kembalikan hanya perubahan minimum antar window (deduplicated by position).
+        Kembalikan hanya perubahan minimum (deduplicated by position).
         """
         total = len(kgrams)
         if total < self.w:
@@ -142,8 +134,8 @@ class FingerprintService:
         for window_start in range(total - self.w + 1):
             window = kgrams[window_start: window_start + self.w]
 
-            min_val  = None
-            min_idx  = -1
+            min_val = None
+            min_idx = -1
             for j in range(self.w - 1, -1, -1):
                 if min_val is None or window[j][0] < min_val:
                     min_val = window[j][0]
@@ -155,19 +147,16 @@ class FingerprintService:
 
         return selected
 
-    # ── Reverse mapping: AKURAT menggunakan char_map ──────────────────────────
-
     def _map_positions(self, selected: list, char_map: list) -> list:
         """
-        Peta akurat 100%: setiap k-gram di processed dipetakan ke posisi original
-        menggunakan char_map dari PreprocessorService.
+        Peta akurat 100%: setiap k-gram di processed dipetakan ke posisi
+        original menggunakan char_map dari PreprocessorService.
 
-        char_map[i] = posisi karakter processed[i] di original_text, sehingga
-        k-gram processed[p:p+k] berkorespondensi dengan
-        original[char_map[p] : char_map[p+k-1]+1].
+        Properti: char_map[i] = posisi processed[i] di original_text.
+        K-gram processed[p:p+k] → original[char_map[p]:char_map[p+k-1]+1].
         """
-        result: list = []
-        kgram_last = self.k - 1
+        result: list  = []
+        kgram_last    = self.k - 1
 
         for hash_val, proc_start in selected:
             proc_end_incl = proc_start + kgram_last
