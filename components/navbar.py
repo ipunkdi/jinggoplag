@@ -1,10 +1,9 @@
 """
-Navbar Component — Fixed
-========================
-Perbaikan:
-1. Tombol tidak muncul ganda (hapus invisible button overlay)
-2. Sticky navbar via CSS
-3. Layout bersih dengan st.columns
+Navbar Component.
+
+Komponen navigasi atas yang konsisten di semua halaman.
+Layout: Logo | Home | Plagiarism Checker | About.
+Elemen aktif ditampilkan dengan warna oranye.
 """
 
 import streamlit as st
@@ -14,63 +13,66 @@ ROUTE_UPLOAD      = "checker_upload"
 ROUTE_COMPARISONS = "checker_comparisons"
 ROUTE_ABOUT       = "about"
 
+_NAVBAR_CSS = """
+<style>
+.nav-btn > div[data-testid="stButton"] > button {
+    background: transparent !important;
+    border: none !important;
+    padding: 0.2rem 0.5rem !important;
+    font-size: 0.95rem !important;
+    font-weight: 400 !important;
+    color: #333333 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    letter-spacing: 0 !important;
+}
+.nav-btn > div[data-testid="stButton"] > button:hover {
+    background: transparent !important;
+    color: #E87722 !important;
+    border: none !important;
+}
+.nav-btn-active > div[data-testid="stButton"] > button {
+    background: transparent !important;
+    border: none !important;
+    padding: 0.2rem 0.5rem !important;
+    font-size: 0.95rem !important;
+    font-weight: 700 !important;
+    color: #E87722 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+}
+.nav-btn-active > div[data-testid="stButton"] > button:hover {
+    background: transparent !important;
+    color: #E87722 !important;
+    border: none !important;
+}
+</style>
+"""
+
+
 def render_navbar(navigate_to) -> None:
+    """
+    Render navbar horizontal dengan logo dan tiga tautan navigasi.
+
+    Args:
+        navigate_to: Callback fungsi dari app.py untuk berpindah halaman.
+    """
     current_route = st.session_state.get("current_route", ROUTE_HOME)
 
-    home_active    = current_route == ROUTE_HOME
-    checker_active = current_route in (ROUTE_UPLOAD, ROUTE_COMPARISONS, "checker_result", "checker_detail")
-    about_active   = current_route == ROUTE_ABOUT
+    home_active = current_route == ROUTE_HOME
+    checker_active = current_route in (
+        ROUTE_UPLOAD, ROUTE_COMPARISONS, "checker_result", "checker_detail"
+    )
+    about_active = current_route == ROUTE_ABOUT
 
-    # Inject sticky navbar CSS sekali saja
-    st.markdown("""
-    <style>
-    /* Sticky navbar container */
-    div[data-testid="stVerticalBlock"] > div:first-child {
-        position: sticky;
-        top: 0;
-        z-index: 999;
-        background: white;
-    }
-    /* Sembunyikan border default tombol Streamlit di navbar */
-    .nav-btn > div[data-testid="stButton"] > button {
-        background: transparent !important;
-        border: none !important;
-        padding: 0.2rem 0.5rem !important;
-        font-size: 0.95rem !important;
-        font-weight: 400 !important;
-        color: #333333 !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-        letter-spacing: 0 !important;
-    }
-    .nav-btn > div[data-testid="stButton"] > button:hover {
-        background: transparent !important;
-        color: #E87722 !important;
-        border: none !important;
-    }
-    .nav-btn-active > div[data-testid="stButton"] > button {
-        background: transparent !important;
-        border: none !important;
-        padding: 0.2rem 0.5rem !important;
-        font-size: 0.95rem !important;
-        font-weight: 700 !important;
-        color: #E87722 !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-    }
-    .nav-btn-active > div[data-testid="stButton"] > button:hover {
-        background: transparent !important;
-        color: #E87722 !important;
-        border: none !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    st.markdown(_NAVBAR_CSS, unsafe_allow_html=True)
 
-    col_logo, col_sp, col_home, col_checker, col_about = st.columns([2, 4, 1, 2, 1])
+    col_logo, _, col_home, col_checker, col_about = st.columns([2, 4, 1, 2, 1])
 
     with col_logo:
         st.markdown(
-            "<div style='padding:10px 0 4px 0; font-size:1.3rem; font-weight:800; color:#E87722;'>🔍 Jinggo Plag</div>",
+            "<div style='padding:10px 0 4px 0; font-size:1.3rem; "
+            "font-weight:800; color:#E87722;'>🔍 Jinggo Plag</div>",
             unsafe_allow_html=True,
         )
 
