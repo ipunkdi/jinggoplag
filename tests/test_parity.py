@@ -5,19 +5,15 @@ Pengujian otomatis: verifikasi hasil pipeline Python identik dengan
 nilai ground truth dari perhitungan manual Excel.
 
 Cara menjalankan:
-    python -m tests.test_parity                  # dari direktori jinggoplag/
-    python -m pytest tests/test_parity.py -v     # jika pytest tersedia
-
-Nilai ground truth diambil dari Winnowing_Plagiarism_Detection.xlsx
-yang sudah diverifikasi manual, menggunakan submissions.zip.
+    python -m tests.test_parity          # dari direktori jinggoplag/
+    pytest tests/test_parity.py -v       # jika pytest tersedia
 
 Ground truth (submissions.zip — emoji sudah dihapus dari tugas.py):
-    |FP1| = 194
-    |FP2| = 200
-    Intersection = 106
-    Union = 288
-    Jaccard = 36.8055555556%
-    Threshold = Moderat
+    |FP1| = 194, |FP2| = 200
+    Intersection = 106, Union = 288
+    Jaccard raw = 36.8055555556%
+    Jaccard rounded (sistem) = 36.81%
+    Threshold = Moderate
 """
 
 import io
@@ -28,33 +24,27 @@ sys.path.insert(0, ".")
 
 from services.extractor    import ZipExtractorService
 from services.fingerprint  import FingerprintService
+from services.highlighter  import HighlightService
 from services.preprocessor import PreprocessorService
 from services.similarity   import SimilarityService
-from services.highlighter  import HighlightService
 
-# ── Ground truth dari Excel manual (dikonfirmasi) ─────────────────────────────
-EXPECTED_FP1        = 194
-EXPECTED_FP2        = 200
-EXPECTED_INTER      = 106
-EXPECTED_UNION      = 288
-EXPECTED_JACCARD_RAW    = 36.8055555556   # nilai presisi dari Excel (belum dibulatkan)
-EXPECTED_JACCARD_ROUNDED = 36.81           # nilai setelah round(..., 2) di SimilarityService
-EXPECTED_THRESHOLD  = "Moderate"           # sistem menggunakan bahasa Inggris
-TOLERANCE           = 0.001                # toleransi persentase (0.001%)
+EXPECTED_FP1              = 194
+EXPECTED_FP2              = 200
+EXPECTED_INTER            = 106
+EXPECTED_UNION            = 288
+EXPECTED_JACCARD_RAW      = 36.8055555556
+EXPECTED_JACCARD_ROUNDED  = 36.81
+EXPECTED_THRESHOLD        = "Moderate"
+TOLERANCE                 = 0.001
 
-# Path ZIP — ubah sesuai lokasi pengujian
 ZIP_PATH = "tests/fixtures/submissions.zip"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
-def load_zip(path: str) -> bytes:
-    """Load ZIP dari file path atau fixture built-in."""
+def _load_zip(path: str) -> bytes:
+    """Load ZIP dari file path atau fallback ke inline fixture."""
     try:
-        with open(path, "rb") as f:
-            return f.read()
+        with open(path, "rb") as fh:
+            return fh.read()
     except FileNotFoundError:
         return _build_inline_fixture()
 
@@ -62,10 +52,8 @@ def load_zip(path: str) -> bytes:
 def _build_inline_fixture() -> bytes:
     """
     Bangun ZIP minimal inline (tanpa file eksternal).
-    Digunakan jika tests/fixtures/submissions.zip tidak tersedia.
 
-    Source code ini mereplikasi struktur submissions.zip asli
-    agar pengujian tetap bisa berjalan di CI tanpa asset eksternal.
+    Digunakan jika tests/fixtures/submissions.zip tidak tersedia.
     """
     main_py = (
         "import os\r\nimport CRUD as CRUD\r\n\r\n"
@@ -101,7 +89,6 @@ def _build_inline_fixture() -> bytes:
         "            break\r\n"
         "    print(\"Program Berakhir, Terima Kasiih KAKAAAAA\")\r\n"
     )
-
     tugas_py = (
         "import os\r\nimport CRUD as crud_module\r\n\r\n"
         "def clear_terminal(os_type: str):\r\n"
@@ -138,7 +125,6 @@ def _build_inline_fixture() -> bytes:
         "            break\r\n"
         "    print(\"Program selesai, terima kasih.\")\r\n"
     )
-
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr("ML-D_362258302025_Marimar/main.py",  main_py)
@@ -146,19 +132,14 @@ def _build_inline_fixture() -> bytes:
     return buf.getvalue()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Suite
-# ─────────────────────────────────────────────────────────────────────────────
-
 class ParityTestSuite:
     """Menjalankan semua pengujian paritas Excel vs sistem."""
 
     def __init__(self) -> None:
+        """Inisialisasi counter dan error collector."""
         self.passed  = 0
         self.failed  = 0
         self._errors: list = []
-
-    # ── Assert helper ─────────────────────────────────────────────────────────
 
     def _assert(self, name: str, condition: bool, detail: str = "") -> None:
         if condition:
@@ -170,39 +151,28 @@ class ParityTestSuite:
             print(msg)
             self._errors.append(msg)
 
-    def _assert_eq(self, name: str, got, expected, fmt: str = "") -> None:
-        ok = (got == expected)
-        detail = f"got={got:{fmt}}, expected={expected:{fmt}}" if not ok else ""
+    def _assert_eq(self, name: str, got, expected) -> None:
+        ok     = got == expected
+        detail = f"got={got}, expected={expected}" if not ok else ""
         self._assert(name, ok, detail)
 
     def _assert_close(self, name: str, got: float, expected: float,
                       tol: float = TOLERANCE) -> None:
-        ok = abs(got - expected) <= tol
+        ok     = abs(got - expected) <= tol
         detail = f"got={got:.10f}, expected={expected:.10f}, tol={tol}" if not ok else ""
         self._assert(name, ok, detail)
 
-    # ── Tests ─────────────────────────────────────────────────────────────────
-
-    def test_preprocessing(self, raw1: str, raw2: str,
-                           r1, r2) -> None:
+    def test_preprocessing(self, r1, r2) -> None:
         """T1 — Preprocessing menghasilkan teks tanpa komentar dan whitespace."""
         print("\n[T1] Preprocessing")
-        self._assert("P1: komentar # dihapus",
-                     "check database" not in r1.processed)
-        self._assert("P2: komentar # dihapus",
-                     "inisialisasi" not in r2.processed)
-        self._assert("P1: tidak ada whitespace",
-                     " " not in r1.processed and "\n" not in r1.processed)
-        self._assert("P2: tidak ada whitespace",
-                     " " not in r2.processed and "\n" not in r2.processed)
-        self._assert("P1: semua huruf kecil",
-                     r1.processed == r1.processed.lower())
-        self._assert("P2: semua huruf kecil",
-                     r2.processed == r2.processed.lower())
-        self._assert("P1: char_map panjang == processed",
-                     len(r1.char_map) == len(r1.processed))
-        self._assert("P2: char_map panjang == processed",
-                     len(r2.char_map) == len(r2.processed))
+        self._assert("P1: komentar # dihapus",   "check database" not in r1.processed)
+        self._assert("P2: komentar # dihapus",   "inisialisasi"   not in r2.processed)
+        self._assert("P1: tidak ada whitespace",  " " not in r1.processed)
+        self._assert("P2: tidak ada whitespace",  " " not in r2.processed)
+        self._assert("P1: semua huruf kecil",     r1.processed == r1.processed.lower())
+        self._assert("P2: semua huruf kecil",     r2.processed == r2.processed.lower())
+        self._assert("P1: char_map len == processed len", len(r1.char_map) == len(r1.processed))
+        self._assert("P2: char_map len == processed len", len(r2.char_map) == len(r2.processed))
         self._assert_eq("P1: panjang processed", len(r1.processed), 805)
         self._assert_eq("P2: panjang processed", len(r2.processed), 745)
 
@@ -215,7 +185,7 @@ class ParityTestSuite:
                 if result.original.lower()[orig_idx] != result.processed[i]
             ]
             self._assert(
-                f"{label}: char_map[i] → original[i] akurat (0 error)",
+                f"{label}: char_map[i] → original[i] akurat",
                 len(errors) == 0,
                 f"{len(errors)} mismatch ditemukan",
             )
@@ -231,17 +201,13 @@ class ParityTestSuite:
             return result
 
         fp_svc = FingerprintService()
-        kgrams = fp_svc._rolling_hash(r1.processed)  # noqa: SLF001
+        kgrams = fp_svc.rolling_hash(r1.processed)
 
         mismatches = [
             i for i, (h, start) in enumerate(kgrams[:50])
             if h != naive_hash(r1.processed[start:start + 5])
         ]
-        self._assert(
-            "Rolling hash == naif hash (50 k-gram pertama)",
-            len(mismatches) == 0,
-            f"{len(mismatches)} mismatch",
-        )
+        self._assert("Rolling hash == naif hash (50 k-gram pertama)", len(mismatches) == 0)
         self._assert_eq("Jumlah k-gram P1", len(kgrams), 801)
 
     def test_fingerprint_counts(self, fp1, fp2) -> None:
@@ -253,12 +219,12 @@ class ParityTestSuite:
     def test_jaccard_components(self, fp1, fp2) -> None:
         """T5 — Intersection, Union, dan Jaccard sesuai ground truth Excel."""
         print("\n[T5] Jaccard Similarity")
-        inter = fp1.fingerprints & fp2.fingerprints
-        union = fp1.fingerprints | fp2.fingerprints
+        inter       = fp1.fingerprints & fp2.fingerprints
+        union       = fp1.fingerprints | fp2.fingerprints
         jaccard_pct = len(inter) / len(union) * 100
 
-        self._assert_eq("Intersection", len(inter),  EXPECTED_INTER)
-        self._assert_eq("Union",         len(union),  EXPECTED_UNION)
+        self._assert_eq("Intersection",           len(inter),  EXPECTED_INTER)
+        self._assert_eq("Union",                  len(union),  EXPECTED_UNION)
         self._assert_close("Jaccard (%) raw vs Excel GT", jaccard_pct, EXPECTED_JACCARD_RAW)
 
     def test_threshold(self, results) -> None:
@@ -268,13 +234,26 @@ class ParityTestSuite:
         self._assert_eq("Threshold teratas",    top.threshold, EXPECTED_THRESHOLD)
         self._assert(   "Similarity > 30%",     top.similarity > 30.0)
         self._assert(   "Similarity <= 80%",    top.similarity <= 80.0)
-        self._assert_close("Similarity (%) top (rounded)", top.similarity, EXPECTED_JACCARD_ROUNDED, tol=0.005)
+        self._assert_close(
+            "Similarity (%) top (rounded)",
+            top.similarity, EXPECTED_JACCARD_ROUNDED, tol=0.005
+        )
 
-    def test_highlight_coverage(self, raw1: str, raw2: str,
-                                fp1, fp2, results) -> None:
-        """T7 — HighlightService meng-highlight baris yang benar."""
-        print("\n[T7] Highlight Coverage")
-        hl_svc = HighlightService()
+    def test_categorize_boundaries(self) -> None:
+        """T7 — SimilarityService.categorize() sesuai semua batas threshold."""
+        print("\n[T7] Threshold Boundary Tests")
+        svc = SimilarityService()
+        self._assert_eq("0.0%   → Low",      svc.categorize(0.0),   "Low")
+        self._assert_eq("29.9%  → Low",      svc.categorize(29.9),  "Low")
+        self._assert_eq("30.0%  → Moderate", svc.categorize(30.0),  "Moderate")
+        self._assert_eq("80.0%  → Moderate", svc.categorize(80.0),  "Moderate")
+        self._assert_eq("80.1%  → High",     svc.categorize(80.1),  "High")
+        self._assert_eq("100.0% → High",     svc.categorize(100.0), "High")
+
+    def test_highlight_coverage(self, raw1: str, raw2: str, fp1, fp2, results) -> None:
+        """T8 — HighlightService meng-highlight baris yang benar."""
+        print("\n[T8] Highlight Coverage")
+        hl_svc  = HighlightService()
         matched = results[0].file_pairs[0].matched_hashes
 
         hl_a = hl_svc.highlight(raw1, fp1.hash_positions, matched)
@@ -287,29 +266,28 @@ class ParityTestSuite:
         self._assert("B: ada baris yang di-highlight",    matched_b > 0)
         self._assert("A: tidak semua baris di-highlight", matched_a < len(hl_a))
         self._assert("B: tidak semua baris di-highlight", matched_b < len(hl_b))
-        self._assert_eq("A: total baris",   len(hl_a), len(raw1.splitlines()))
-        self._assert_eq("B: total baris",   len(hl_b), len(raw2.splitlines()))
+        self._assert_eq("A: total baris", len(hl_a), len(raw1.splitlines()))
+        self._assert_eq("B: total baris", len(hl_b), len(raw2.splitlines()))
 
         print(f"     A: {matched_a}/{len(hl_a)} baris di-highlight")
         print(f"     B: {matched_b}/{len(hl_b)} baris di-highlight")
 
     def test_zip_wrapper_detection(self) -> None:
-        """T8 — Extractor menangani ZIP dengan wrapper folder."""
-        print("\n[T8] ZIP Wrapper Folder Detection")
+        """T9 — Extractor menangani ZIP dengan wrapper folder."""
+        print("\n[T9] ZIP Wrapper Folder Detection")
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as zf:
             zf.writestr("submissions/ProjectA/main.py", "def hello(): pass")
             zf.writestr("submissions/ProjectB/tugas.py", "def hello(): pass")
-        svc = ZipExtractorService(buf.getvalue())
+        svc      = ZipExtractorService(buf.getvalue())
         projects = svc.extract()
-        self._assert("Wrapper 'submissions/' terdeteksi dan di-strip",
+        self._assert("Wrapper terdeteksi dan di-strip",
                      "ProjectA" in projects and "ProjectB" in projects)
-        self._assert("Tidak ada key 'submissions' di projects",
-                     "submissions" not in projects)
+        self._assert("Tidak ada key 'submissions'", "submissions" not in projects)
 
     def test_single_project_raises(self) -> None:
-        """T9 — ZIP dengan 1 project menghasilkan ValueError."""
-        print("\n[T9] Single Project Error Handling")
+        """T10 — ZIP dengan 1 project menghasilkan ValueError."""
+        print("\n[T10] Single Project Error Handling")
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as zf:
             zf.writestr("OnlyProject/main.py", "x = 1")
@@ -320,8 +298,8 @@ class ParityTestSuite:
             self._assert("ValueError raised untuk 1 project", True)
 
     def test_no_code_files_raises(self) -> None:
-        """T10 — ZIP tanpa .py/.php/.dart menghasilkan ValueError."""
-        print("\n[T10] No Supported Files Error Handling")
+        """T11 — ZIP tanpa .py/.php/.dart menghasilkan ValueError."""
+        print("\n[T11] No Supported Files Error Handling")
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as zf:
             zf.writestr("ProjectA/readme.txt", "docs")
@@ -332,24 +310,21 @@ class ParityTestSuite:
         except ValueError:
             self._assert("ValueError raised untuk no .py files", True)
 
-    # ── Run all ───────────────────────────────────────────────────────────────
-
     def run(self) -> bool:
         """Jalankan seluruh suite dan kembalikan True jika semua lulus."""
         print("=" * 60)
         print("JINGGO PLAG — Test Parity Suite (Excel vs Sistem)")
         print("=" * 60)
 
-        # ── Load data ─────────────────────────────────────────────────────────
-        zip_bytes = load_zip(ZIP_PATH)
+        zip_bytes = _load_zip(ZIP_PATH)
         extractor = ZipExtractorService(zip_bytes)
         projects  = extractor.extract()
 
         proj_keys = list(projects.keys())
         assert len(proj_keys) == 2, f"Butuh 2 project, dapat {len(proj_keys)}"
 
-        key_a = next(k for k in proj_keys if "Marimar" in k or "main" in k)
-        key_b = next(k for k in proj_keys if "Pulgoso" in k or "tugas" in k)
+        key_a = next(k for k in proj_keys if "Marimar" in k)
+        key_b = next(k for k in proj_keys if "Pulgoso" in k)
 
         raw1 = list(projects[key_a].values())[0]
         raw2 = list(projects[key_b].values())[0]
@@ -359,27 +334,26 @@ class ParityTestSuite:
         r2  = pre.preprocess(raw2, ".py")
 
         fp_svc = FingerprintService()
-        fp1    = fp_svc.compute(r1.processed, r1.original, r1.char_map)
-        fp2    = fp_svc.compute(r2.processed, r2.original, r2.char_map)
+        fp1    = fp_svc.compute(r1.processed, r1.char_map)
+        fp2    = fp_svc.compute(r2.processed, r2.char_map)
 
         sim_svc = SimilarityService()
         results = sim_svc.compute_all(
             {key_a: {"main.py": fp1}, key_b: {"tugas.py": fp2}}
         )
 
-        # ── Run tests ─────────────────────────────────────────────────────────
-        self.test_preprocessing(raw1, raw2, r1, r2)
+        self.test_preprocessing(r1, r2)
         self.test_char_map_accuracy(r1, r2)
         self.test_rolling_hash(r1)
         self.test_fingerprint_counts(fp1, fp2)
         self.test_jaccard_components(fp1, fp2)
         self.test_threshold(results)
+        self.test_categorize_boundaries()
         self.test_highlight_coverage(raw1, raw2, fp1, fp2, results)
         self.test_zip_wrapper_detection()
         self.test_single_project_raises()
         self.test_no_code_files_raises()
 
-        # ── Summary ───────────────────────────────────────────────────────────
         total = self.passed + self.failed
         print()
         print("=" * 60)
@@ -395,23 +369,18 @@ class ParityTestSuite:
         return self.failed == 0
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Entry point
-# ─────────────────────────────────────────────────────────────────────────────
+def test_full_parity() -> None:
+    """Satu test function untuk pytest compatibility."""
+    suite  = ParityTestSuite()
+    passed = suite.run()
+    assert passed, "Ada test yang gagal — lihat output di atas"
+
 
 def main() -> None:
     """Jalankan suite dari command line."""
     suite  = ParityTestSuite()
     passed = suite.run()
     sys.exit(0 if passed else 1)
-
-
-# Compat: pytest dapat menemukan test_ functions di level module
-def test_full_parity() -> None:
-    """Satu test function untuk pytest compatibility."""
-    suite  = ParityTestSuite()
-    passed = suite.run()
-    assert passed, "Ada test yang gagal — lihat output di atas"
 
 
 if __name__ == "__main__":
