@@ -1,6 +1,6 @@
 """
-Halaman Checker Comparisons (Step 2)
-=====================================
+Halaman Checker Comparisons (Step 2).
+
 Menampilkan tabel "Top Comparisons" berisi semua pasangan proyek
 diurutkan dari similarity tertinggi, dengan badge threshold berwarna.
 Klik ikon mata → navigasi ke halaman Result (Step 3).
@@ -8,6 +8,7 @@ Klik ikon mata → navigasi ke halaman Result (Step 3).
 
 import streamlit as st
 
+from components.step_indicator import render_step_indicator
 
 ROUTE_RESULT = "checker_result"
 ROUTE_UPLOAD = "checker_upload"
@@ -15,19 +16,17 @@ ROUTE_UPLOAD = "checker_upload"
 
 def render(navigate_to) -> None:
     """
-    Merender halaman Comparisons.
+    Render halaman Comparisons.
 
     Args:
-        navigate_to: Callback navigasi dari app.py
+        navigate_to: Callback navigasi dari app.py.
     """
-    from pages.checker_upload import _render_step_indicator
-    _render_step_indicator(current_step=2)
+    render_step_indicator(current_step=2)
 
     comparison_results = st.session_state.get("comparison_results", [])
 
     st.markdown("<div style='padding-top: 1rem;'></div>", unsafe_allow_html=True)
 
-    # Header
     st.markdown(
         """
         <h2 style="
@@ -46,30 +45,24 @@ def render(navigate_to) -> None:
             navigate_to(ROUTE_UPLOAD)
         return
 
-    total = len(comparison_results)
+    total      = len(comparison_results)
     high_count = sum(1 for r in comparison_results if r.threshold == "High")
     mod_count  = sum(1 for r in comparison_results if r.threshold == "Moderate")
 
-    # Ringkasan singkat
     st.markdown(
         f"""
         <p style="color:#777; font-size:0.88rem; margin-bottom:1.2rem;">
             {total} pasangan ditemukan &nbsp;·&nbsp;
-            <span style="color:#D32F2F; font-weight:600;">{high_count} High</span> &nbsp;·&nbsp;
+            <span style="color:#D32F2F; font-weight:600;">{high_count} High</span>
+            &nbsp;·&nbsp;
             <span style="color:#E87722; font-weight:600;">{mod_count} Moderate</span>
         </p>
         """,
         unsafe_allow_html=True,
     )
 
-    # ----------------------------------------------------------------
-    # Tabel Header
-    # ----------------------------------------------------------------
     _render_table_header()
 
-    # ----------------------------------------------------------------
-    # Baris Tabel
-    # ----------------------------------------------------------------
     for idx, comparison in enumerate(comparison_results, start=1):
         _render_comparison_row(
             index=idx,
@@ -81,18 +74,13 @@ def render(navigate_to) -> None:
             unsafe_allow_html=True,
         )
 
-    # Tombol "Analisis Baru"
     st.markdown("<div style='margin-top:1.5rem;'></div>", unsafe_allow_html=True)
     if st.button("⟳  Analisis Baru", key="btn_new_analysis_comp"):
         navigate_to(ROUTE_UPLOAD)
 
 
-# ---------------------------------------------------------------------------
-# Tabel Header
-# ---------------------------------------------------------------------------
-
 def _render_table_header() -> None:
-    """Merender baris header tabel."""
+    """Render baris header tabel."""
     col_idx, col_submissions, col_sim, col_view = st.columns([0.5, 5, 2, 1])
 
     header_style = "font-weight:700; color:#1A1A1A; font-size:0.9rem;"
@@ -121,19 +109,8 @@ def _render_table_header() -> None:
     )
 
 
-# ---------------------------------------------------------------------------
-# Baris Tabel
-# ---------------------------------------------------------------------------
-
 def _render_comparison_row(index: int, comparison, navigate_to) -> None:
-    """
-    Merender satu baris data perbandingan proyek.
-
-    Args:
-        index:      Nomor urut (1-indexed)
-        comparison: ComparisonResult object
-        navigate_to: Callback navigasi
-    """
+    """Render satu baris data perbandingan proyek."""
     col_idx, col_submissions, col_sim, col_view = st.columns([0.5, 5, 2, 1])
 
     with col_idx:
@@ -143,7 +120,6 @@ def _render_comparison_row(index: int, comparison, navigate_to) -> None:
         )
 
     with col_submissions:
-        # Dua folder berdampingan
         sub_l, sub_sep, sub_r = st.columns([2, 0.3, 2])
         with sub_l:
             st.markdown(
@@ -185,27 +161,16 @@ def _render_comparison_row(index: int, comparison, navigate_to) -> None:
         )
 
     with col_view:
-        # Tombol ikon mata
         if st.button("👁", key=f"view_comp_{index}", help="Lihat detail perbandingan"):
             st.session_state["selected_comparison"] = comparison
-            st.session_state["selected_file_pair"]  = None  # Reset pilihan file
+            st.session_state["selected_file_pair"]  = None
             navigate_to(ROUTE_RESULT)
 
 
-# ---------------------------------------------------------------------------
-# Badge helper
-# ---------------------------------------------------------------------------
-
 def _threshold_badge(similarity: float, threshold: str) -> str:
-    """
-    Menghasilkan HTML badge berwarna sesuai threshold.
-
-    High     → merah
-    Moderate → oranye
-    Low      → hijau
-    """
+    """Hasilkan HTML badge berwarna sesuai threshold."""
     colors = {
-        "High":     ("#FFEBEE", "#D32F2F"),  # background, text
+        "High":     ("#FFEBEE", "#D32F2F"),
         "Moderate": ("#FFF3E0", "#E87722"),
         "Low":      ("#E8F5E9", "#2E7D32"),
     }

@@ -1,35 +1,32 @@
 """
-Halaman Checker Detail (Step 4)
-================================
+Halaman Checker Detail (Step 4).
+
 Area inspeksi visual: side-by-side comparison dengan highlight kuning
 pada baris kode yang memiliki fingerprint identik.
-
-Layout:
-    [Files of ProjectA: path/file_a.py]  |  [Files of ProjectB: path/file_b.py]
-    [Baris kode...]  [similarity%]       |  [Baris kode...]  [similarity%]
 
 Baris kuning = fingerprint cocok dengan pasangan file-nya.
 Baris putih  = tidak ada kemiripan yang terdeteksi.
 """
 
-import streamlit as st
 import html as html_module
 
-from services.highlighter import HighlightService, HighlightedLine
+import streamlit as st
 
+from components.step_indicator import render_step_indicator
+from pages.checker_comparisons import _threshold_badge
+from services.highlighter      import HighlightService, HighlightedLine
 
 ROUTE_RESULT = "checker_result"
 
 
 def render(navigate_to) -> None:
     """
-    Merender halaman Detail.
+    Render halaman Detail.
 
     Args:
-        navigate_to: Callback navigasi dari app.py
+        navigate_to: Callback navigasi dari app.py.
     """
-    from pages.checker_upload import _render_step_indicator
-    _render_step_indicator(current_step=4)
+    render_step_indicator(current_step=4)
 
     file_pair  = st.session_state.get("selected_file_pair")
     comparison = st.session_state.get("selected_comparison")
@@ -42,9 +39,6 @@ def render(navigate_to) -> None:
 
     st.markdown("<div style='padding-top: 1rem;'></div>", unsafe_allow_html=True)
 
-    # ----------------------------------------------------------------
-    # Header — judul dan average similarity
-    # ----------------------------------------------------------------
     st.markdown(
         """
         <h2 style="
@@ -59,7 +53,6 @@ def render(navigate_to) -> None:
         unsafe_allow_html=True,
     )
 
-    from pages.checker_comparisons import _threshold_badge
     badge = _threshold_badge(file_pair.similarity, file_pair.threshold)
     st.markdown(
         f"""
@@ -70,9 +63,6 @@ def render(navigate_to) -> None:
         unsafe_allow_html=True,
     )
 
-    # ----------------------------------------------------------------
-    # Ambil data fingerprint dan original source dari session_state
-    # ----------------------------------------------------------------
     fingerprint_data = st.session_state.get("fingerprint_data", {})
     matched_hashes   = file_pair.matched_hashes
 
@@ -83,9 +73,6 @@ def render(navigate_to) -> None:
     original_a   = projects_raw.get(comparison.project_a, {}).get(file_pair.file_a, "")
     original_b   = projects_raw.get(comparison.project_b, {}).get(file_pair.file_b, "")
 
-    # ----------------------------------------------------------------
-    # Jalankan HighlightService
-    # ----------------------------------------------------------------
     hl_svc = HighlightService()
 
     highlighted_a = hl_svc.highlight(
@@ -93,23 +80,16 @@ def render(navigate_to) -> None:
         hash_positions=fp_a.hash_positions if fp_a else [],
         matched_hashes=matched_hashes,
     )
-
     highlighted_b = hl_svc.highlight(
         original_text=original_b,
         hash_positions=fp_b.hash_positions if fp_b else [],
         matched_hashes=matched_hashes,
     )
 
-    # Statistik highlight
     stats_a = HighlightService.compute_match_stats(highlighted_a)
     stats_b = HighlightService.compute_match_stats(highlighted_b)
 
-    # ----------------------------------------------------------------
-    # Side-by-side layout
-    # ----------------------------------------------------------------
     col_a, col_divider, col_b = st.columns([10, 0.2, 10])
-
-    # Path lengkap file
     full_path_a = f"{comparison.project_a}/{file_pair.file_a}"
     full_path_b = f"{comparison.project_b}/{file_pair.file_b}"
 
@@ -120,7 +100,6 @@ def render(navigate_to) -> None:
             highlighted_lines=highlighted_a,
             similarity=file_pair.similarity,
             stats=stats_a,
-            panel_id="panel_a",
         )
 
     with col_divider:
@@ -137,19 +116,16 @@ def render(navigate_to) -> None:
             highlighted_lines=highlighted_b,
             similarity=file_pair.similarity,
             stats=stats_b,
-            panel_id="panel_b",
         )
 
-    # ----------------------------------------------------------------
-    # Legenda & navigasi bawah
-    # ----------------------------------------------------------------
     st.markdown("<div style='margin-top:1.5rem;'></div>", unsafe_allow_html=True)
 
     col_legend, col_back = st.columns([3, 1])
     with col_legend:
         st.markdown(
             """
-            <div style="display:flex; align-items:center; gap:1rem; font-size:0.82rem; color:#555;">
+            <div style="display:flex; align-items:center; gap:1rem;
+                        font-size:0.82rem; color:#555;">
                 <div style="display:flex; align-items:center; gap:6px;">
                     <div style="width:16px; height:16px; background:#FFF176;
                                 border:1px solid #F9A825; border-radius:3px;"></div>
@@ -169,30 +145,23 @@ def render(navigate_to) -> None:
             navigate_to(ROUTE_RESULT)
 
 
-# ---------------------------------------------------------------------------
-# Code Panel Renderer
-# ---------------------------------------------------------------------------
-
 def _render_code_panel(
     title: str,
     full_path: str,
-    highlighted_lines: list[HighlightedLine],
+    highlighted_lines: list,
     similarity: float,
     stats: dict,
-    panel_id: str,
 ) -> None:
     """
-    Merender satu panel kode (kiri atau kanan).
+    Render satu panel kode (kiri atau kanan).
 
     Args:
-        title:             Label header panel ("Files of ProjectA:")
-        full_path:         Path lengkap file (misal: ProjectA/main.py)
-        highlighted_lines: Output HighlightService
-        similarity:        Persentase similarity file ini
-        stats:             Output compute_match_stats
-        panel_id:          ID unik untuk key widget (panel_a / panel_b)
+        title:             Label header panel.
+        full_path:         Path lengkap file.
+        highlighted_lines: Output HighlightService.
+        similarity:        Persentase similarity file ini.
+        stats:             Output compute_match_stats.
     """
-    # Header panel
     st.markdown(
         f"""
         <div style="
@@ -226,7 +195,6 @@ def _render_code_panel(
         unsafe_allow_html=True,
     )
 
-    # Blok kode dengan highlight
     code_html = _build_code_html(highlighted_lines)
 
     st.markdown(
@@ -242,11 +210,7 @@ def _render_code_panel(
             font-size: 0.78rem;
             line-height: 1.5;
         ">
-            <table style="
-                border-collapse: collapse;
-                width: 100%;
-                min-width: 300px;
-            ">
+            <table style="border-collapse: collapse; width: 100%; min-width: 300px;">
                 {code_html}
             </table>
         </div>
@@ -255,30 +219,25 @@ def _render_code_panel(
     )
 
 
-def _build_code_html(highlighted_lines: list[HighlightedLine]) -> str:
+def _build_code_html(highlighted_lines: list) -> str:
     """
-    Membangun HTML tabel kode dengan highlight kuning pada baris matched.
+    Bangun HTML tabel kode dengan highlight kuning pada baris matched.
 
-    Setiap baris = satu <tr> dengan dua <td>:
-    - td.line-num: nomor baris (abu)
-    - td.line-code: konten kode (kuning jika is_match=True)
+    Args:
+        highlighted_lines: List HighlightedLine dari HighlightService.
 
     Returns:
-        String HTML berisi semua baris <tr>
+        String HTML berisi semua baris sebagai <tr> elements.
     """
-    rows: list[str] = []
+    rows: list = []
 
     for line in highlighted_lines:
         bg_color = "#FFF176" if line.is_match else "#FFFFFF"
         num_bg   = "#FFF9C4" if line.is_match else "#F9F9F9"
 
-        # Escape HTML entities di konten kode untuk keamanan
         safe_content = html_module.escape(line.content)
-
-        # Ganti spasi ganda agar indentasi terlihat di HTML
         safe_content = safe_content.replace("  ", "&nbsp;&nbsp;")
 
-        # Jika baris kosong, tampilkan non-breaking space agar baris memiliki tinggi
         if not safe_content:
             safe_content = "&nbsp;"
 
