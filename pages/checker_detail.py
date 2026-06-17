@@ -148,7 +148,7 @@ def render(navigate_to) -> None:
 def _render_code_panel(
     title: str,
     full_path: str,
-    highlighted_lines: list,
+    highlighted_lines: list[HighlightedLine],
     similarity: float,
     stats: dict,
 ) -> None:
@@ -219,7 +219,7 @@ def _render_code_panel(
     )
 
 
-def _build_code_html(highlighted_lines: list) -> str:
+def _build_code_html(highlighted_lines: list[HighlightedLine]) -> str:
     """
     Bangun HTML tabel kode dengan highlight kuning pada baris matched.
 
