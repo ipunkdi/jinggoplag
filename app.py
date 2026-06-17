@@ -2,41 +2,42 @@
 app.py — Entry Point Jinggo Plag.
 
 Mengelola:
-1. Konfigurasi halaman Streamlit
-2. Inisialisasi session_state sebagai volatile database
-3. Protected sequential routing (wizard flow)
-4. Injeksi custom CSS
-5. Dispatch ke halaman yang tepat
+1. Inisialisasi session_state sebagai volatile database
+2. Protected sequential routing (wizard flow)
+3. Injeksi custom CSS
+4. Dispatch ke halaman yang tepat
 
 Workflow yang dilindungi:
     Home → Upload → Comparisons → Result → Detail
+
+CATATAN ARSITEKTUR — st.set_page_config():
+Streamlit mewajibkan set_page_config() menjadi STREAMLIT COMMAND PERTAMA
+yang DIEKSEKUSI (bukan baris kode pertama dalam file). Karena semua modul
+pages/* dan components/* HANYA mendefinisikan fungsi render() — tidak ada
+satupun st.* yang dieksekusi pada level modul saat import — maka aman untuk
+menaruh semua import di atas secara konvensional, dan memanggil
+set_page_config() sebagai baris pertama di dalam main(). Ini menghasilkan
+import order yang bersih tanpa perlu komentar noqa/pylint-disable apapun.
 """
 
-import streamlit as st  # noqa: E402
+from pathlib import Path
 
-st.set_page_config(
-    page_title="Jinggo Plag",
-    page_icon="🔍",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
+import streamlit as st
 
-from pathlib import Path  # noqa: E402
-
-from components.navbar         import render_navbar       # noqa: E402
-from pages.about               import render as render_about        # noqa: E402
-from pages.checker_comparisons import render as render_comparisons  # noqa: E402
-from pages.checker_detail      import render as render_detail       # noqa: E402
-from pages.checker_result      import render as render_result       # noqa: E402
-from pages.checker_upload      import render as render_upload       # noqa: E402
-from pages.home                import render as render_home         # noqa: E402
+from components.navbar         import render_navbar
+from pages.about                import render as render_about
+from pages.checker_comparisons  import render as render_comparisons
+from pages.checker_detail       import render as render_detail
+from pages.checker_result       import render as render_result
+from pages.checker_upload       import render as render_upload
+from pages.home                 import render as render_home
 
 ROUTE_HOME        = "home"
-ROUTE_UPLOAD      = "checker_upload"
-ROUTE_COMPARISONS = "checker_comparisons"
-ROUTE_RESULT      = "checker_result"
-ROUTE_DETAIL      = "checker_detail"
-ROUTE_ABOUT       = "about"
+ROUTE_UPLOAD       = "checker_upload"
+ROUTE_COMPARISONS  = "checker_comparisons"
+ROUTE_RESULT       = "checker_result"
+ROUTE_DETAIL       = "checker_detail"
+ROUTE_ABOUT        = "about"
 
 
 def _init_session_state() -> None:
@@ -47,15 +48,15 @@ def _init_session_state() -> None:
     data hilang saat session Streamlit berakhir — menjamin privasi source code.
     """
     defaults = {
-        "current_route":        ROUTE_HOME,
-        "projects_raw":         None,
+        "current_route":         ROUTE_HOME,
+        "projects_raw":          None,
         "projects_preprocessed": None,
-        "fingerprint_data":     None,
-        "comparison_results":   None,
-        "selected_comparison":  None,
-        "selected_file_pair":   None,
-        "analysis_running":     False,
-        "upload_error":         None,
+        "fingerprint_data":      None,
+        "comparison_results":    None,
+        "selected_comparison":   None,
+        "selected_file_pair":    None,
+        "analysis_running":      False,
+        "upload_error":          None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -94,10 +95,12 @@ def _inject_css() -> None:
         css_content = (
             "[data-testid='stSidebar'] { display: none !important; }"
             "[data-testid='collapsedControl'] { display: none !important; }"
+            "[data-testid='stHeader'] { display: none !important; }"
+            "[data-testid='stToolbar'] { display: none !important; }"
             ".main .block-container { padding-top: 0rem; max-width: 1200px; }"
-            "#MainMenu { visibility: hidden; }"
-            "footer { visibility: hidden; }"
-            "header { visibility: hidden; }"
+            "#MainMenu { display: none !important; }"
+            "footer { display: none !important; }"
+            "header { display: none !important; }"
         )
     st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
 
@@ -160,7 +163,19 @@ def _render_current_page() -> None:
 
 
 def main() -> None:
-    """Entry point utama aplikasi Jinggo Plag."""
+    """
+    Entry point utama aplikasi Jinggo Plag.
+
+    set_page_config() WAJIB menjadi Streamlit command pertama yang dieksekusi
+    pada setiap run — ditaruh sebagai baris pertama di sini, bukan di level
+    modul, agar seluruh import di atas dapat tersusun rapi sesuai PEP 8.
+    """
+    st.set_page_config(
+        page_title="Jinggo Plag",
+        page_icon="🔍",
+        layout="wide",
+        initial_sidebar_state="collapsed",
+    )
     _init_session_state()
     _inject_css()
     render_navbar(navigate_to=navigate_to)
