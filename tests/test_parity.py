@@ -20,8 +20,6 @@ import io
 import sys
 import zipfile
 
-sys.path.insert(0, ".")
-
 from services.extractor    import ZipExtractorService
 from services.fingerprint  import FingerprintService
 from services.highlighter  import HighlightService
