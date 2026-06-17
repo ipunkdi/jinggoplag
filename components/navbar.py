@@ -3,7 +3,17 @@ Navbar Component.
 
 Komponen navigasi atas yang konsisten di semua halaman.
 Layout: Logo | Home | Plagiarism Checker | About.
-Elemen aktif ditampilkan dengan warna oranye.
+
+CATATAN ARSITEKTUR — Targeting CSS via :has():
+Membungkus tombol dengan <div class="..."> di satu st.markdown() lalu
+menutupnya di st.markdown() lain TIDAK menghasilkan nesting DOM yang
+sebenarnya — setiap st.markdown() membuat elemen container-nya sendiri
+sebagai sibling, bukan parent. Selector seperti
+".nav-btn > div[data-testid='stButton'] > button" karena itu TIDAK PERNAH
+cocok. Sebagai gantinya, kita gunakan selector :has() yang menjangkar pada
+baris kolom navbar itu sendiri (mendeteksi span oranye "Jinggo Plag"),
+lalu menata SEMUA tombol di dalam baris tersebut — teknik yang sama yang
+sudah bekerja untuk sticky positioning di styles/main.css.
 """
 
 import streamlit as st
@@ -15,36 +25,12 @@ ROUTE_ABOUT       = "about"
 
 _NAVBAR_CSS = """
 <style>
-.nav-btn > div[data-testid="stButton"] > button {
-    background: transparent !important;
-    border: none !important;
-    padding: 0.2rem 0.5rem !important;
-    font-size: 0.95rem !important;
-    font-weight: 400 !important;
-    color: #333333 !important;
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    letter-spacing: 0 !important;
-}
-.nav-btn > div[data-testid="stButton"] > button:hover {
-    background: transparent !important;
-    color: #E87722 !important;
-    border: none !important;
-}
-.nav-btn-active > div[data-testid="stButton"] > button {
-    background: transparent !important;
-    border: none !important;
-    padding: 0.2rem 0.5rem !important;
-    font-size: 0.95rem !important;
-    font-weight: 700 !important;
-    color: #E87722 !important;
-    box-shadow: none !important;
-    border-radius: 0 !important;
-}
-.nav-btn-active > div[data-testid="stButton"] > button:hover {
-    background: transparent !important;
-    color: #E87722 !important;
-    border: none !important;
+/* Cegah teks tombol navbar membungkus baris kedua, apa pun lebar kolomnya. */
+div[data-testid="stHorizontalBlock"]:has(
+    div[data-testid="stMarkdownContainer"] span[style*="E87722"]
+) div[data-testid="stButton"] > button {
+    white-space: nowrap !important;
+    min-width: max-content !important;
 }
 </style>
 """
@@ -57,17 +43,9 @@ def render_navbar(navigate_to) -> None:
     Args:
         navigate_to: Callback fungsi dari app.py untuk berpindah halaman.
     """
-    current_route = st.session_state.get("current_route", ROUTE_HOME)
-
-    home_active = current_route == ROUTE_HOME
-    checker_active = current_route in (
-        ROUTE_UPLOAD, ROUTE_COMPARISONS, "checker_result", "checker_detail"
-    )
-    about_active = current_route == ROUTE_ABOUT
-
     st.markdown(_NAVBAR_CSS, unsafe_allow_html=True)
 
-    col_logo, _, col_home, col_checker, col_about = st.columns([2, 4, 1, 2, 1])
+    col_logo, _, col_home, col_checker, col_about = st.columns([2, 4, 1.3, 2.4, 1.3])
 
     with col_logo:
         st.markdown(
@@ -77,25 +55,16 @@ def render_navbar(navigate_to) -> None:
         )
 
     with col_home:
-        css_class = "nav-btn-active" if home_active else "nav-btn"
-        st.markdown(f"<div class='{css_class}'>", unsafe_allow_html=True)
-        if st.button("Home", key="nav_home"):
+        if st.button("Home", key="nav_home", use_container_width=True):
             navigate_to(ROUTE_HOME)
-        st.markdown("</div>", unsafe_allow_html=True)
 
     with col_checker:
-        css_class = "nav-btn-active" if checker_active else "nav-btn"
-        st.markdown(f"<div class='{css_class}'>", unsafe_allow_html=True)
-        if st.button("Plagiarism Checker", key="nav_checker"):
+        if st.button("Plagiarism Checker", key="nav_checker", use_container_width=True):
             navigate_to(ROUTE_UPLOAD)
-        st.markdown("</div>", unsafe_allow_html=True)
 
     with col_about:
-        css_class = "nav-btn-active" if about_active else "nav-btn"
-        st.markdown(f"<div class='{css_class}'>", unsafe_allow_html=True)
-        if st.button("About", key="nav_about"):
+        if st.button("About", key="nav_about", use_container_width=True):
             navigate_to(ROUTE_ABOUT)
-        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown(
         "<hr style='margin:0 0 1rem 0; border:none; border-top:1.5px solid #E0E0E0;'>",
