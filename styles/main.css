@@ -22,9 +22,23 @@ header                            { display: none !important; }
 [data-testid="collapsedControl"]  { display: none !important; }
 [data-testid="stDecoration"]      { display: none !important; }
 
-/* Batas lebar konten dan padding halaman */
+/* Batas lebar konten dan padding halaman.
+   CATATAN: jika padding atas terasa masih berlebih di versi Streamlit
+   Anda, JANGAN tambahkan selector `.st-emotion-cache-xxxxx` — class
+   tersebut di-generate OTOMATIS oleh Emotion (CSS-in-JS internal
+   Streamlit) dan BISA BERUBAH tanpa peringatan setiap kali Streamlit
+   di-update, bahkan kadang antar sesi. Selector data-testid di bawah
+   ini RESMI dan stabil, mencakup beberapa struktur kontainer yang
+   dipakai berbagai versi Streamlit — tambahkan baris baru di sini
+   jika perlu menjangkau versi tertentu, bukan hash class. */
+[data-testid="stAppViewContainer"],
+[data-testid="stAppViewContainer"] > .main,
+[data-testid="stMain"],
 .main .block-container {
-    padding-top:    0rem !important;
+    padding-top: 0rem !important;
+}
+
+.main .block-container {
     padding-bottom: 3rem;
     padding-left:   2rem;
     padding-right:  2rem;
