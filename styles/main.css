@@ -8,17 +8,23 @@
    1. RESET & LAYOUT DASAR
    ------------------------------------------------------------ */
 
-/* Sembunyikan elemen bawaan Streamlit yang tidak dipakai */
-#MainMenu          { visibility: hidden; }
-footer             { visibility: hidden; }
-header             { visibility: hidden; }
-[data-testid="stSidebar"]        { display: none !important; }
-[data-testid="collapsedControl"] { display: none !important; }
-[data-testid="stDecoration"]     { display: none !important; }
+/* Sembunyikan elemen bawaan Streamlit yang tidak dipakai.
+   PENTING: gunakan display:none (bukan visibility:hidden) karena
+   visibility:hidden TETAP MEREZERVASI ruang layout-nya, mendorong
+   seluruh konten (termasuk navbar) ke bawah di setiap halaman. */
+#MainMenu                         { display: none !important; }
+footer                            { display: none !important; }
+header                            { display: none !important; }
+[data-testid="stHeader"]          { display: none !important; }
+[data-testid="stToolbar"]         { display: none !important; }
+[data-testid="stStatusWidget"]    { display: none !important; }
+[data-testid="stSidebar"]         { display: none !important; }
+[data-testid="collapsedControl"]  { display: none !important; }
+[data-testid="stDecoration"]      { display: none !important; }
 
 /* Batas lebar konten dan padding halaman */
 .main .block-container {
-    padding-top:    0rem;
+    padding-top:    0rem !important;
     padding-bottom: 3rem;
     padding-left:   2rem;
     padding-right:  2rem;
