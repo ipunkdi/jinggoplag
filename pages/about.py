@@ -8,7 +8,7 @@ Konten: The Science (flowchart), The Process (5 tahap), Developer.
 import streamlit as st
 
 
-def render(navigate_to) -> None:  # noqa: ARG001
+def render(navigate_to) -> None:  # noqa: ARG001  # pylint: disable=unused-argument
     """
     Render halaman About.
 
