@@ -2,7 +2,18 @@
 Halaman Home.
 
 Single-screen landing page dengan hero section dan tombol CTA "ANALYSIS NOW".
-Layout non-scrollable — semua konten fit dalam satu viewport.
+
+CATATAN ARSITEKTUR PENTING — Mengapa TIDAK menggunakan display:flex
+pada .main .block-container:
+Navbar (komponen terpisah) dan konten Home dirender ke KONTAINER YANG SAMA
+(.main .block-container), karena Streamlit tidak memisahkan navbar ke
+elemen DOM tersendiri. Memaksa display:flex + justify-content:center pada
+kontainer tersebut akan mengubah konteks layout SELURUH anak elemen di
+dalamnya — termasuk baris kolom navbar — yang dapat menyebabkan kolom
+sempit (Home/About) menyusut dan teks-nya wrap, sementara kolom lebar
+(Plagiarism Checker) tetap aman. Sebagai gantinya, single-screen look
+dicapai dengan padding-top berbasis vh pada wrapper LOKAL saja, tanpa
+mengubah properti flex/justify-content kontainer bersama.
 """
 
 import streamlit as st
@@ -11,11 +22,6 @@ _HOME_CSS = """
 <style>
 .main .block-container {
     overflow: hidden !important;
-    height: calc(100vh - 120px) !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-    padding-top: 0 !important;
 }
 div[data-testid="stButton"] > button {
     background-color: #FFFFFF !important;
@@ -44,6 +50,10 @@ def render(navigate_to) -> None:
         navigate_to: Callback untuk berpindah ke halaman lain.
     """
     st.markdown(_HOME_CSS, unsafe_allow_html=True)
+
+    # Padding berbasis vh untuk memvisualkan hero content di tengah viewport,
+    # TANPA mengubah display/flex pada .block-container (lihat catatan di atas).
+    st.markdown("<div style='padding-top: 10vh;'></div>", unsafe_allow_html=True)
 
     _, col_center, _ = st.columns([1, 3, 1])
 
