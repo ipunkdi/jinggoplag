@@ -20,11 +20,12 @@ import io
 import sys
 import zipfile
 
-from services.extractor    import ZipExtractorService
-from services.fingerprint  import FingerprintService
-from services.highlighter  import HighlightService
-from services.preprocessor import PreprocessorService
-from services.similarity   import SimilarityService
+from services.extractor        import ZipExtractorService
+from services.fingerprint      import FingerprintService
+from services.highlighter      import HighlightService
+from services.preprocessor     import PreprocessorService
+from services.report_generator import ReportGeneratorService
+from services.similarity       import SimilarityService
 
 EXPECTED_FP1              = 194
 EXPECTED_FP2              = 200
@@ -308,6 +309,31 @@ class ParityTestSuite:
         except ValueError:
             self._assert("ValueError raised untuk no .py files", True)
 
+    def test_pdf_report_generation(self, results) -> None:
+        """T12 — ReportGeneratorService menghasilkan PDF valid dari hasil nyata."""
+        print("\n[T12] PDF Report Generation")
+        report_svc = ReportGeneratorService()
+
+        summary_pdf = report_svc.generate_summary_report(results)
+        self._assert(
+            "Summary PDF: header %PDF valid",
+            summary_pdf[:4] == b"%PDF",
+        )
+        self._assert(
+            "Summary PDF: ukuran > 0 byte",
+            len(summary_pdf) > 0,
+        )
+
+        detail_pdf = report_svc.generate_detail_report(results[0])
+        self._assert(
+            "Detail PDF: header %PDF valid",
+            detail_pdf[:4] == b"%PDF",
+        )
+        self._assert(
+            "Detail PDF: ukuran > 0 byte",
+            len(detail_pdf) > 0,
+        )
+
     def run(self) -> bool:
         """Jalankan seluruh suite dan kembalikan True jika semua lulus."""
         print("=" * 60)
@@ -351,6 +377,7 @@ class ParityTestSuite:
         self.test_zip_wrapper_detection()
         self.test_single_project_raises()
         self.test_no_code_files_raises()
+        self.test_pdf_report_generation(results)
 
         total = self.passed + self.failed
         print()
