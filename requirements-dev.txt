@@ -1,0 +1,11 @@
+# requirements-dev.txt
+# Dependensi tambahan untuk pengembangan dan pengujian.
+# Install dengan: pip install -r requirements-dev.txt
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Linting & formatting (opsional — dipakai lokal, bukan di CI)
+pylint>=3.0.0
+ruff>=0.1.0
