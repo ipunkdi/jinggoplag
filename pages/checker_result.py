@@ -5,12 +5,16 @@ Menampilkan breakdown file-level dari dua proyek yang dipilih di Step 2.
 Header: dua nama folder + "OVERVIEW" + Total Similarity.
 Tabel: Index / File A / File B / Similarity / View.
 Klik ikon mata → navigasi ke Detail (Step 4).
+Tombol "Export PDF" → unduh laporan detail pasangan project ini.
 """
+
+from datetime import datetime
 
 import streamlit as st
 
-from components.step_indicator    import render_step_indicator
-from pages.checker_comparisons    import _threshold_badge
+from components.step_indicator import render_step_indicator
+from pages.checker_comparisons import _threshold_badge
+from services.report_generator import ReportGeneratorService
 
 ROUTE_COMPARISONS = "checker_comparisons"
 ROUTE_DETAIL      = "checker_detail"
@@ -52,14 +56,18 @@ def render(navigate_to) -> None:
     )
 
     badge = _threshold_badge(comparison.similarity, comparison.threshold)
-    st.markdown(
-        f"""
-        <p style="font-size:0.95rem; color:#333; margin-bottom:1.2rem;">
-            <strong>Total Similarity (Project Average):</strong> {badge}
-        </p>
-        """,
-        unsafe_allow_html=True,
-    )
+    col_score, col_export = st.columns([4, 1.3])
+    with col_score:
+        st.markdown(
+            f"""
+            <p style="font-size:0.95rem; color:#333; margin-bottom:1.2rem;">
+                <strong>Total Similarity (Project Average):</strong> {badge}
+            </p>
+            """,
+            unsafe_allow_html=True,
+        )
+    with col_export:
+        _render_export_button(comparison)
 
     file_pairs = comparison.file_pairs
 
@@ -175,3 +183,30 @@ def _back_button(navigate_to) -> None:
     """Render tombol kembali ke halaman Comparisons."""
     if st.button("← Kembali ke Comparisons", key="btn_back_to_comp_from_result"):
         navigate_to(ROUTE_COMPARISONS)
+
+
+def _render_export_button(comparison) -> None:
+    """
+    Render tombol unduh laporan PDF detail untuk satu pasangan project.
+
+    PDF dihasilkan saat tombol diklik (lazy generation), disimpan sementara
+    di session_state agar tidak perlu di-generate ulang setiap rerun.
+    """
+    cache_key = f"pdf_detail_{comparison.project_a}_{comparison.project_b}"
+
+    if st.button("📄 Export PDF", key="btn_export_detail", use_container_width=True):
+        with st.spinner("Menyusun laporan PDF..."):
+            report_service = ReportGeneratorService()
+            pdf_bytes = report_service.generate_detail_report(comparison)
+            st.session_state[cache_key] = pdf_bytes
+
+    if cache_key in st.session_state:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        st.download_button(
+            label="⬇️ Unduh Laporan",
+            data=st.session_state[cache_key],
+            file_name=f"jinggoplag_detail_{timestamp}.pdf",
+            mime="application/pdf",
+            key="btn_download_detail",
+            use_container_width=True,
+        )

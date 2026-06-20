@@ -4,11 +4,15 @@ Halaman Checker Comparisons (Step 2).
 Menampilkan tabel "Top Comparisons" berisi semua pasangan proyek
 diurutkan dari similarity tertinggi, dengan badge threshold berwarna.
 Klik ikon mata → navigasi ke halaman Result (Step 3).
+Tombol "Export PDF" → unduh laporan ringkasan seluruh pasangan.
 """
+
+from datetime import datetime
 
 import streamlit as st
 
-from components.step_indicator import render_step_indicator
+from components.step_indicator  import render_step_indicator
+from services.report_generator  import ReportGeneratorService
 
 ROUTE_RESULT = "checker_result"
 ROUTE_UPLOAD = "checker_upload"
@@ -49,17 +53,24 @@ def render(navigate_to) -> None:
     high_count = sum(1 for r in comparison_results if r.threshold == "High")
     mod_count  = sum(1 for r in comparison_results if r.threshold == "Moderate")
 
-    st.markdown(
-        f"""
-        <p style="color:#777; font-size:0.88rem; margin-bottom:1.2rem;">
-            {total} pasangan ditemukan &nbsp;·&nbsp;
-            <span style="color:#D32F2F; font-weight:600;">{high_count} High</span>
-            &nbsp;·&nbsp;
-            <span style="color:#E87722; font-weight:600;">{mod_count} Moderate</span>
-        </p>
-        """,
-        unsafe_allow_html=True,
-    )
+    col_stats, col_export = st.columns([4, 1.3])
+
+    with col_stats:
+        st.markdown(
+            f"""
+            <p style="color:#777; font-size:0.88rem; margin-bottom:1.2rem;
+                       padding-top: 0.4rem;">
+                {total} pasangan ditemukan &nbsp;·&nbsp;
+                <span style="color:#D32F2F; font-weight:600;">{high_count} High</span>
+                &nbsp;·&nbsp;
+                <span style="color:#E87722; font-weight:600;">{mod_count} Moderate</span>
+            </p>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with col_export:
+        _render_export_button(comparison_results)
 
     _render_table_header()
 
@@ -185,3 +196,32 @@ def _threshold_badge(similarity: float, threshold: str) -> str:
         f"<span style='font-weight:400; font-size:0.78rem;'>({threshold})</span>"
         f"</span>"
     )
+
+
+def _render_export_button(comparison_results: list) -> None:
+    """
+    Render tombol unduh laporan PDF ringkasan seluruh pasangan.
+
+    PDF dihasilkan saat tombol diklik (lazy generation) — tidak dibuat
+    ulang pada setiap rerun Streamlit yang tidak terkait tombol ini.
+    """
+    st.markdown("<div style='padding-top: 0.4rem;'></div>", unsafe_allow_html=True)
+
+    cache_key = f"pdf_summary_{len(comparison_results)}"
+
+    if st.button("📄 Export PDF", key="btn_export_summary", use_container_width=True):
+        with st.spinner("Menyusun laporan PDF..."):
+            report_service = ReportGeneratorService()
+            pdf_bytes = report_service.generate_summary_report(comparison_results)
+            st.session_state[cache_key] = pdf_bytes
+
+    if cache_key in st.session_state:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        st.download_button(
+            label="⬇️ Unduh Laporan",
+            data=st.session_state[cache_key],
+            file_name=f"jinggoplag_ringkasan_{timestamp}.pdf",
+            mime="application/pdf",
+            key="btn_download_summary",
+            use_container_width=True,
+        )
