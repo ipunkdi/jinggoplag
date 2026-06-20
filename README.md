@@ -42,6 +42,7 @@ Seluruh pemrosesan berjalan **di memori (volatile)** selama satu sesi — tidak 
 - **Deteksi otomatis struktur arsip** — mendeteksi dan menghapus *wrapper folder* (mis. hasil "Compress to ZIP" yang membungkus semua folder ke satu folder induk tambahan).
 - **Tahan terhadap modifikasi kosmetik** — *preprocessing* menghapus komentar, *whitespace*, dan perbedaan kapitalisasi sebelum analisis, sehingga sistem tidak mudah dikelabui oleh perubahan format semata.
 - **Pelaporan bertingkat** — alur empat langkah: ringkasan antar-*project* → rincian antar-*file* → inspeksi baris kode dengan sorotan kuning pada bagian yang identik.
+- **Export laporan PDF** — unduh laporan ringkasan seluruh pasangan (cocok untuk dokumentasi satu kelas/angkatan) maupun laporan detail satu pasangan project, langsung dari antarmuka, tanpa instalasi tambahan.
 - **Kategorisasi ambang batas** — hasil persentase dikelompokkan otomatis ke kategori Rendah (`< 30%`), Moderat (`30–80%`), dan Tinggi (`> 80%`).
 - **Privasi by design** — tanpa basis data, tanpa penulisan file ke disk; seluruh state hilang begitu sesi berakhir.
 - **Teruji & terverifikasi** — 39 *automated test case* yang membandingkan hasil komputasi sistem dengan perhitungan manual (lihat [Pengujian](#pengujian)).
