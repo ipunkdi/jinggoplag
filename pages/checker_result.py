@@ -90,12 +90,13 @@ def render(navigate_to) -> None:
 
 
 def _render_project_header(project_a: str, project_b: str) -> None:
-    """Render kartu header dua folder proyek berdampingan."""
+    """Render kartu header dua folder proyek berdampingan, posisi center."""
     st.markdown(
         f"""
         <div style="
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 1.5rem;
             border: 2px solid #CCCCCC;
             border-radius: 10px;
@@ -189,24 +190,18 @@ def _render_export_button(comparison) -> None:
     """
     Render tombol unduh laporan PDF detail untuk satu pasangan project.
 
-    PDF dihasilkan saat tombol diklik (lazy generation), disimpan sementara
-    di session_state agar tidak perlu di-generate ulang setiap rerun.
+    PDF dihasilkan langsung saat halaman dirender dan disuguhkan sebagai
+    SATU tombol unduh — sekali klik langsung memicu download browser.
     """
-    cache_key = f"pdf_detail_{comparison.project_a}_{comparison.project_b}"
+    report_service = ReportGeneratorService()
+    pdf_bytes      = report_service.generate_detail_report(comparison)
+    timestamp      = datetime.now().strftime("%Y%m%d_%H%M")
 
-    if st.button("📄 Export PDF", key="btn_export_detail", use_container_width=True):
-        with st.spinner("Menyusun laporan PDF..."):
-            report_service = ReportGeneratorService()
-            pdf_bytes = report_service.generate_detail_report(comparison)
-            st.session_state[cache_key] = pdf_bytes
-
-    if cache_key in st.session_state:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-        st.download_button(
-            label="⬇️ Unduh Laporan",
-            data=st.session_state[cache_key],
-            file_name=f"jinggoplag_detail_{timestamp}.pdf",
-            mime="application/pdf",
-            key="btn_download_detail",
-            use_container_width=True,
-        )
+    st.download_button(
+        label="📄 Export PDF",
+        data=pdf_bytes,
+        file_name=f"jinggoplag_detail_{timestamp}.pdf",
+        mime="application/pdf",
+        key="btn_export_detail",
+        use_container_width=True,
+    )
