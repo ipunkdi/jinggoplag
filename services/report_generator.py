@@ -27,7 +27,6 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import (
-    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -41,6 +40,11 @@ ALGORITHM_PARAMS = {
     "base": 256,
     "mod": "1.000.000.007",
 }
+
+# Lebar kolom bersama untuk tabel ringkasan & tabel rincian per-file
+# (#, Kolom A, Kolom B, Similarity, Kategori) — dipakai oleh kedua tabel
+# agar baris definisi Table(...) tidak melebihi batas panjang baris.
+RESULT_TABLE_COL_WIDTHS = [1 * cm, 5.7 * cm, 5.7 * cm, 2.3 * cm, 2.3 * cm]
 
 THRESHOLD_COLORS = {
     "High":     (colors.HexColor("#FFEBEE"), colors.HexColor("#D32F2F")),
@@ -246,7 +250,7 @@ class ReportGeneratorService:
                 comp.threshold,
             ])
 
-        table = Table(rows, colWidths=[1 * cm, 5.7 * cm, 5.7 * cm, 2.3 * cm, 2.3 * cm], repeatRows=1)
+        table = Table(rows, colWidths=RESULT_TABLE_COL_WIDTHS, repeatRows=1)
         style_commands = self._base_table_style()
 
         for row_idx, comp in enumerate(comparison_results, start=1):
@@ -291,7 +295,7 @@ class ReportGeneratorService:
                 fp.threshold,
             ])
 
-        table = Table(rows, colWidths=[1 * cm, 5.7 * cm, 5.7 * cm, 2.3 * cm, 2.3 * cm], repeatRows=1)
+        table = Table(rows, colWidths=RESULT_TABLE_COL_WIDTHS, repeatRows=1)
         style_commands = self._base_table_style()
 
         for row_idx, fp in enumerate(file_pairs, start=1):
