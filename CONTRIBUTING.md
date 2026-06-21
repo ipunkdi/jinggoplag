@@ -167,7 +167,7 @@ Untuk menambahkan ekstensi baru (mis. `.js`, `.ipynb`):
 
 Sebelum mengajukan *pull request*, pastikan seluruh item berikut terpenuhi:
 
-- [ ] `python -m tests.test_parity` menghasilkan **39/39 lulus**
+- [ ] `python -m tests.test_parity` menghasilkan **43/43 lulus**
 - [ ] Tidak ada *syntax error* baru (`python -c "import ast; ast.parse(open('file.py').read())"`)
 - [ ] Semua fungsi dan kelas baru memiliki *docstring*
 - [ ] Tidak ada `st.*` yang dipanggil di luar fungsi `render()` pada file `pages/` atau `components/`

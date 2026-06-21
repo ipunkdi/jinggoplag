@@ -16,6 +16,7 @@ menggunakan algoritma **Winnowing Fingerprinting** dengan **Rolling Hash Rabin-K
 - [Fitur Utama](#fitur-utama)
 - [Arsitektur Sistem](#arsitektur-sistem)
 - [Cara Kerja Algoritma](#cara-kerja-algoritma)
+  - [Justifikasi Akademik Nilai Threshold](#justifikasi-akademik-nilai-threshold)
 - [Struktur Proyek](#struktur-proyek)
 - [Instalasi & Menjalankan](#instalasi--menjalankan)
 - [Format Input (.zip)](#format-input-zip)
@@ -40,12 +41,12 @@ Seluruh pemrosesan berjalan **di memori (volatile)** selama satu sesi — tidak 
 
 - **Pemrosesan skala repositori** — satu arsip `.zip` dapat berisi puluhan *project root* mahasiswa sekaligus; sistem membandingkan seluruh kombinasi pasangan secara otomatis.
 - **Deteksi otomatis struktur arsip** — mendeteksi dan menghapus *wrapper folder* (mis. hasil "Compress to ZIP" yang membungkus semua folder ke satu folder induk tambahan).
-- **Tahan terhadap modifikasi kosmetik** — *preprocessing* menghapus komentar, *whitespace*, dan perbedaan kapitalisasi sebelum analisis, sehingga sistem tidak mudah dikelabui oleh perubahan format semata.
+- **Tahan terhadap modifikasi kosmetik dan penyalinan sebagian** — *preprocessing* menghapus komentar, *whitespace*, dan perbedaan kapitalisasi sebelum analisis, sehingga sistem tidak mudah dikelabui oleh perubahan format semata. Karena Jaccard Similarity dihitung dari rasio *fingerprint* yang cocok, *partial copying* (menyalin sebagian fungsi/blok kode lalu menulis sisanya secara mandiri) tetap terdeteksi secara **proporsional** — skor mencerminkan porsi yang benar-benar disalin, dan fitur *highlight* menandai persis baris mana yang identik.
 - **Pelaporan bertingkat** — alur empat langkah: ringkasan antar-*project* → rincian antar-*file* → inspeksi baris kode dengan sorotan kuning pada bagian yang identik.
-- **Export laporan PDF** — unduh laporan ringkasan seluruh pasangan (cocok untuk dokumentasi satu kelas/angkatan) maupun laporan detail satu pasangan project, langsung dari antarmuka, tanpa instalasi tambahan.
+- **Export laporan PDF** — unduh laporan ringkasan seluruh pasangan (cocok untuk dokumentasi satu kelas/angkatan), laporan detail satu pasangan project, maupun laporan kode berdampingan dengan *highlight* (format *landscape*, cocok dilampirkan sebagai bukti konkret) — langsung dari antarmuka, tanpa instalasi tambahan.
 - **Kategorisasi ambang batas** — hasil persentase dikelompokkan otomatis ke kategori Rendah (`< 30%`), Moderat (`30–80%`), dan Tinggi (`> 80%`).
 - **Privasi by design** — tanpa basis data, tanpa penulisan file ke disk; seluruh state hilang begitu sesi berakhir.
-- **Teruji & terverifikasi** — 39 *automated test case* yang membandingkan hasil komputasi sistem dengan perhitungan manual (lihat [Pengujian](#pengujian)).
+- **Teruji & terverifikasi** — 45 *automated test case* yang membandingkan hasil komputasi sistem dengan perhitungan manual (lihat [Pengujian](#pengujian)).
 
 ## Arsitektur Sistem
 
@@ -107,51 +108,71 @@ Highlight reverse-mapping ke baris asli           → services/highlighter.py
 | `30% – 80%` | Moderat (*Moderate*) |
 | `> 80%` | Tinggi (*High*) |
 
+### Justifikasi Akademik Nilai Threshold
+
+Tidak ada standar tunggal yang mengikat secara universal untuk menentukan batas persentase similarity source code — literatur internasional maupun kebijakan institusi di Indonesia menunjukkan variasi nilai tergantung konteks, *tool*, dan kebijakan kampus. Berikut sumber yang menjadi rujukan penentuan threshold sistem ini:
+
+**Batas bawah 30% (Rendah/Low)** memiliki konsensus luas di literatur Indonesia:
+- Kebijakan resmi **S1 Teknologi Informasi, Telkom University Kampus Jakarta** mengategorikan plagiarisme ringan (`< 30%`), sedang (`30–70%`), dan berat (`> 70%`).
+- Kebijakan serupa diterapkan **Fakultas Teknik Universitas Pasundan** dan editorial **Jurnal MEDICINUS**.
+- Diterapkan secara spesifik pada deteksi plagiarisme *source code* menggunakan algoritma Rabin-Karp, dengan kategori identik (`< 30%` ringan, `30–70%` sedang, `> 70%` besar) — Tugas Akhir dipublikasikan di *Journal of Software Engineering* (ejurnal.seminar-id.com).
+- Studi internasional **"Collaboration Versus Cheating"** (Simha, R., et al., arXiv:1812.00276) menetapkan *cut-off* 30% MOSS *similarity* berdasarkan bukti empiris: seluruh kasus ≥30% pernah dirujuk ke tim instruksional, sementara tidak ada kasus <20% yang dirujuk.
+
+**Batas atas 80% (Tinggi/High)** — perlu transparansi: mayoritas sumber Indonesia di atas justru memakai **70%**, bukan 80%, sebagai batas atas. Namun nilai 80% memiliki rujukan langsung yang relevan:
+- **Jurnal INOVTEK POLBENG – Seri Informatika** (Politeknik Negeri Bengkalis, terindeks SINTA, ISSN 2527-9866), Vol. 9 No. 1, 2024, "Deteksi Plagiat Tesis Berbahasa Indonesia Menggunakan Metode Cosine Similarity": menetapkan ambang batas 0,8 (80%) — pasangan dokumen dengan kesamaan ≥80% yang diukur lewat metrik Cosine **atau Jaccard** dikategorikan terindikasi plagiat.
+
+**Untuk *source code* secara spesifik**, literatur internasional menunjukkan tidak ada nilai tunggal yang disepakati — beragam *tool* memakai *threshold* optimal yang berbeda-beda:
+- **Prechelt & Malpohl (2003)**, *"Finding Plagiarisms Among a Set of Programs with JPlag"*, *Journal of Universal Computer Science*, menerapkan *threshold* 50% untuk hasil JPlag.
+- **Cosma & Joy**, dikutip dalam *"Identifying Plagiarised Programming Assignments with Detection Tool Consensus"* (ERIC/files.eric.ed.gov), melaporkan rentang *threshold* optimal yang bervariasi: 40–70% untuk *tool* Sim, 10–70% untuk MOSS, dan 30–70% untuk JPlag.
+- **"Detection of a Source Code Plagiarism in a Student Programming Competition"** (arXiv:1912.08138) secara eksplisit menyatakan: *"there is no explicit criterion for what level of similarity can be considered evidence of plagiarism"* — pemilihan *threshold* pada penelitian tersebut diakui bersifat *common sense*, bukan standar baku.
+
+**Kesimpulan untuk thesis/skripsi:** nilai 30%/80% pada sistem ini **dapat dijustifikasi** dengan sumber di atas, tetapi disarankan secara eksplisit didiskusikan di BAB Metodologi sebagai *pilihan desain* (bukan satu-satunya kebenaran), dengan menyitir baik sumber yang mendukung 70% maupun 80% sebagai pembanding — pola penyajian yang umum dan dianggap kuat dalam sidang Tugas Akhir Indonesia. Payung regulasi tertinggi tetap **Peraturan Menteri Pendidikan Nasional RI No. 17 Tahun 2010** tentang Pencegahan dan Penanggulangan Plagiat di Perguruan Tinggi, yang mewajibkan deteksi plagiarisme namun **menyerahkan penentuan nilai ambang batas numerik kepada masing-masing institusi**.
+
 Penjelasan matematis lengkap (formula Rolling Hash, properti Jaccard, strategi *Best Match Only*) tersedia di [`docs/ALGORITHM.md`](docs/ALGORITHM.md).
 
 ## Struktur Proyek
 
 ```
 jinggoplag/
-├── app.py                       # Entry point Streamlit + routing
-├── requirements.txt
-├── requirements-dev.txt         # Dependensi tambahan untuk testing
+├── app.py                       # Entry point: routing, session_state, dispatch halaman
+├── requirements.txt             # Dependensi runtime (streamlit, reportlab)
+├── requirements-dev.txt         # Dependensi tambahan untuk testing (pytest, pylint, ruff)
 │
-├── services/                    # Service Layer (OOP, backend murni)
-│   ├── extractor.py             #   ZipExtractorService
-│   ├── preprocessor.py          #   PreprocessorService
-│   ├── fingerprint.py           #   FingerprintService
-│   ├── similarity.py            #   SimilarityService
-│   ├── highlighter.py           #   HighlightService
-│   └── report_generator.py      #   ReportGeneratorService (export PDF)
+├── services/                    # Service Layer (OOP, backend murni, tanpa Streamlit)
+│   ├── extractor.py             #   ZipExtractorService — buka .zip, deteksi wrapper folder, filter ekstensi
+│   ├── preprocessor.py          #   PreprocessorService — strip komentar, whitespace, case folding, char_map
+│   ├── fingerprint.py           #   FingerprintService — K-Gram, Rolling Hash Rabin-Karp, Winnowing
+│   ├── similarity.py            #   SimilarityService — Jaccard, Best Match Only, kategorisasi threshold
+│   ├── highlighter.py           #   HighlightService — petakan matched hash ke nomor baris asli
+│   └── report_generator.py      #   ReportGeneratorService — export PDF (ringkasan, detail, kode berdampingan)
 │
 ├── pages/                       # Satu file per halaman wizard
-│   ├── home.py
-│   ├── checker_upload.py
-│   ├── checker_comparisons.py
-│   ├── checker_result.py
-│   ├── checker_detail.py
-│   └── about.py
+│   ├── home.py                  #   Landing page dengan tombol CTA "ANALYSIS NOW"
+│   ├── checker_upload.py        #   Step 1 — upload .zip, jalankan pipeline analisis penuh
+│   ├── checker_comparisons.py   #   Step 2 — tabel semua pasangan project, tombol Export PDF ringkasan
+│   ├── checker_result.py        #   Step 3 — breakdown per file dalam satu pasangan, Export PDF detail
+│   ├── checker_detail.py        #   Step 4 — kode berdampingan dengan highlight, Export PDF kode
+│   └── about.py                 #   Halaman statis: flowchart algoritma, tahapan proses, kredit
 │
-├── components/                  # Komponen UI yang dipakai ulang
-│   ├── navbar.py
-│   ├── step_indicator.py
-│   └── comparison_table.py
+├── components/                  # Komponen UI yang dipakai ulang lintas halaman
+│   ├── navbar.py                 #   Navbar atas: logo, Home/Checker/About, active-state highlighting
+│   ├── step_indicator.py         #   Breadcrumb wizard (Step 1-4), dipakai oleh keempat halaman checker
+│   └── comparison_table.py       #   Tabel perbandingan generik (badge threshold, ikon view)
 │
 ├── styles/
-│   └── main.css
+│   └── main.css                  # Stylesheet global: tema hitam-oranye, sembunyikan chrome Streamlit
 │
 ├── tests/
-│   ├── test_parity.py           # 43 automated test (lihat bagian Pengujian)
+│   ├── test_parity.py            # 45 automated test — paritas Excel vs sistem (lihat bagian Pengujian)
 │   └── fixtures/
-│       └── submissions.zip      # Data uji nyata (2 project root)
+│       └── submissions.zip       # Data uji nyata (2 project root, ground truth terverifikasi manual)
 │
 ├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── ALGORITHM.md
-│   └── TESTING.md
+│   ├── ARCHITECTURE.md           # Keputusan desain, service layer, diagram alur data end-to-end
+│   ├── ALGORITHM.md              # Formula matematis: Rolling Hash, Winnowing, Jaccard, threshold
+│   └── TESTING.md                # Metodologi pengujian: parity test, black-box scenario, evaluasi akurasi
 │
-└── .github/workflows/test.yml   # CI — jalankan test otomatis tiap push
+└── .github/workflows/test.yml    # CI — jalankan test otomatis tiap push (matrix Python 3.10/3.11/3.12)
 ```
 
 ## Instalasi & Menjalankan
@@ -208,7 +229,7 @@ pip install -r requirements-dev.txt
 pytest tests/test_parity.py -v
 ```
 
-Cakupan pengujian (43 *assertion*, 12 kelompok):
+Cakupan pengujian (45 *assertion*, 13 kelompok):
 
 | Kelompok | Yang Diverifikasi |
 |---|---|
@@ -224,6 +245,7 @@ Cakupan pengujian (43 *assertion*, 12 kelompok):
 | T10 | Penanganan *error* — hanya 1 *project* ditemukan |
 | T11 | Penanganan *error* — tidak ada *file* berekstensi yang didukung |
 | T12 | *Export* PDF — header `%PDF` valid dan ukuran berkas > 0 byte untuk laporan ringkasan & detail |
+| T13 | *Export* PDF kode berdampingan (*landscape*) — header `%PDF` valid dan ukuran berkas > 0 byte untuk laporan kode dengan *highlight* |
 
 Detail metodologi pengujian (termasuk *black-box testing* alur UI) ada di [`docs/TESTING.md`](docs/TESTING.md).
 
