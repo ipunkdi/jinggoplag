@@ -122,7 +122,8 @@ jinggoplag/
 │   ├── preprocessor.py          #   PreprocessorService
 │   ├── fingerprint.py           #   FingerprintService
 │   ├── similarity.py            #   SimilarityService
-│   └── highlighter.py           #   HighlightService
+│   ├── highlighter.py           #   HighlightService
+│   └── report_generator.py      #   ReportGeneratorService (export PDF)
 │
 ├── pages/                       # Satu file per halaman wizard
 │   ├── home.py
@@ -141,7 +142,7 @@ jinggoplag/
 │   └── main.css
 │
 ├── tests/
-│   ├── test_parity.py           # 39 automated test (lihat bagian Pengujian)
+│   ├── test_parity.py           # 43 automated test (lihat bagian Pengujian)
 │   └── fixtures/
 │       └── submissions.zip      # Data uji nyata (2 project root)
 │
@@ -207,7 +208,7 @@ pip install -r requirements-dev.txt
 pytest tests/test_parity.py -v
 ```
 
-Cakupan pengujian (39 *assertion*, 11 kelompok):
+Cakupan pengujian (43 *assertion*, 12 kelompok):
 
 | Kelompok | Yang Diverifikasi |
 |---|---|
@@ -222,6 +223,7 @@ Cakupan pengujian (39 *assertion*, 11 kelompok):
 | T9 | Deteksi *wrapper folder* otomatis pada `.zip` |
 | T10 | Penanganan *error* — hanya 1 *project* ditemukan |
 | T11 | Penanganan *error* — tidak ada *file* berekstensi yang didukung |
+| T12 | *Export* PDF — header `%PDF` valid dan ukuran berkas > 0 byte untuk laporan ringkasan & detail |
 
 Detail metodologi pengujian (termasuk *black-box testing* alur UI) ada di [`docs/TESTING.md`](docs/TESTING.md).
 

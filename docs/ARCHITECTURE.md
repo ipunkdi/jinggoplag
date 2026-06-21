@@ -18,8 +18,11 @@ Dokumen ini menjelaskan keputusan desain arsitektural Jinggo Plag secara rinci, 
 | `FingerprintService` | `processed_text` + `char_map` | `FingerprintResult` (fingerprints, hash_positions) | Streamlit, *service* lain |
 | `SimilarityService` | `dict[project][file] -> FingerprintResult` | `list[ComparisonResult]` | Streamlit, *service* lain |
 | `HighlightService` | `original_text` + `hash_positions` + `matched_hashes` | `list[HighlightedLine]` | Streamlit, *service* lain |
+| `ReportGeneratorService` | `list[ComparisonResult]` atau satu `ComparisonResult` | `bytes` PDF | Streamlit, *service* lain |
 
-Setiap *service* adalah kelas independen tanpa *dependency* satu sama lain secara langsung — orkestrasi pipeline (memanggil kelima *service* secara berurutan) dilakukan oleh `pages/checker_upload.py::_run_pipeline_steps`, BUKAN oleh *service* itu sendiri. Ini memungkinkan setiap *service* diuji dalam isolasi penuh.
+Lima *service* pertama (`ZipExtractorService` s.d. `HighlightService`) membentuk **pipeline deteksi inti** yang berurutan — dipanggil langsung saat analisis berjalan (lihat diagram di bawah). `ReportGeneratorService` **bukan bagian dari pipeline inti**; ia adalah *service* presentasi yang dipanggil *on-demand* dari `pages/checker_comparisons.py` dan `pages/checker_result.py` saat pengguna menekan tombol *Export PDF*, mengonsumsi *output* yang sudah ada (`ComparisonResult`) tanpa melakukan komputasi *similarity* baru. Pemisahan ini sengaja dijaga agar logika algoritma deteksi tetap terisolasi dari logika *output*/pelaporan.
+
+Setiap *service* adalah kelas independen tanpa *dependency* satu sama lain secara langsung — orkestrasi pipeline inti (memanggil lima *service* deteksi secara berurutan) dilakukan oleh `pages/checker_upload.py::_run_pipeline_steps`, BUKAN oleh *service* itu sendiri. Ini memungkinkan setiap *service* diuji dalam isolasi penuh.
 
 ### Mengapa `char_map`, Bukan Pencarian Posisi?
 
@@ -84,12 +87,15 @@ Streamlit mewajibkan `set_page_config()` menjadi *Streamlit command* **pertama y
                                   ▼
                      list[ComparisonResult] → session_state
                                   │
-                  (pengguna memilih pasangan via UI)
-                                  ▼
-                     ┌────────────────────────┐
-                     │   HighlightService       │
-                     │   (char pos → baris)     │
-                     └────────────┬────────────┘
-                                  ▼
-                     list[HighlightedLine] → render Detail page
+                  ┌───────────────┴────────────────┐
+                  │ (klik Export PDF)               │ (pengguna memilih pasangan)
+                  ▼                                  ▼
+     ┌─────────────────────────┐        ┌────────────────────────┐
+     │  ReportGeneratorService   │        │   HighlightService       │
+     │  (on-demand, dari UI)     │        │   (char pos → baris)     │
+     └────────────┬──────────────┘        └────────────┬────────────┘
+                  ▼                                     ▼
+          bytes PDF → st.download_button     list[HighlightedLine] → render Detail page
 ```
+
+`ReportGeneratorService` digambar sebagai cabang **paralel**, bukan kelanjutan linear dari pipeline — ia tidak pernah dipanggil otomatis saat analisis berjalan, melainkan hanya saat pengguna secara eksplisit menekan tombol *Export PDF* di halaman Comparisons (`list[ComparisonResult]` penuh) atau Result (satu `ComparisonResult` terpilih).
