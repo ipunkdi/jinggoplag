@@ -29,7 +29,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run parity test suite (39 assertions)
+      - name: Run parity test suite (45 assertions)
         run: python -m tests.test_parity
 
       - name: Verify zero syntax errors across project

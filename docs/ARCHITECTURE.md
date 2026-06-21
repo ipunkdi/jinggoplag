@@ -18,7 +18,7 @@ Dokumen ini menjelaskan keputusan desain arsitektural Jinggo Plag secara rinci, 
 | `FingerprintService` | `processed_text` + `char_map` | `FingerprintResult` (fingerprints, hash_positions) | Streamlit, *service* lain |
 | `SimilarityService` | `dict[project][file] -> FingerprintResult` | `list[ComparisonResult]` | Streamlit, *service* lain |
 | `HighlightService` | `original_text` + `hash_positions` + `matched_hashes` | `list[HighlightedLine]` | Streamlit, *service* lain |
-| `ReportGeneratorService` | `list[ComparisonResult]` atau satu `ComparisonResult` | `bytes` PDF | Streamlit, *service* lain |
+| `ReportGeneratorService` | `list[ComparisonResult]`, satu `ComparisonResult`, atau (`ComparisonResult` + `FilePairResult` + 2× `list[HighlightedLine]`) | `bytes` PDF | Streamlit, *service* lain |
 
 Lima *service* pertama (`ZipExtractorService` s.d. `HighlightService`) membentuk **pipeline deteksi inti** yang berurutan — dipanggil langsung saat analisis berjalan (lihat diagram di bawah). `ReportGeneratorService` **bukan bagian dari pipeline inti**; ia adalah *service* presentasi yang dipanggil *on-demand* dari `pages/checker_comparisons.py` dan `pages/checker_result.py` saat pengguna menekan tombol *Export PDF*, mengonsumsi *output* yang sudah ada (`ComparisonResult`) tanpa melakukan komputasi *similarity* baru. Pemisahan ini sengaja dijaga agar logika algoritma deteksi tetap terisolasi dari logika *output*/pelaporan.
 
@@ -87,15 +87,36 @@ Streamlit mewajibkan `set_page_config()` menjadi *Streamlit command* **pertama y
                                   ▼
                      list[ComparisonResult] → session_state
                                   │
-                  ┌───────────────┴────────────────┐
-                  │ (klik Export PDF)               │ (pengguna memilih pasangan)
-                  ▼                                  ▼
-     ┌─────────────────────────┐        ┌────────────────────────┐
-     │  ReportGeneratorService   │        │   HighlightService       │
-     │  (on-demand, dari UI)     │        │   (char pos → baris)     │
-     └────────────┬──────────────┘        └────────────┬────────────┘
-                  ▼                                     ▼
-          bytes PDF → st.download_button     list[HighlightedLine] → render Detail page
+            ┌─────────────────────┼─────────────────────┐
+            │ (klik Export PDF     │ (pengguna memilih    │ (klik Export PDF
+            │  di Comparisons)     │  pasangan)            │  di Result)
+            ▼                     │                       ▼
+ ┌───────────────────────┐        │          ┌───────────────────────┐
+ │ ReportGeneratorService  │        │          │ ReportGeneratorService  │
+ │ .generate_summary_      │        │          │ .generate_detail_       │
+ │  report()                │        │          │  report()                │
+ └────────────┬────────────┘        │          └────────────┬────────────┘
+              ▼                     ▼                       ▼
+      bytes PDF                ┌────────────────────────┐   bytes PDF
+      → download_button        │   HighlightService       │   → download_button
+                                │   (char pos → baris)     │
+                                └────────────┬────────────┘
+                                             ▼
+                              list[HighlightedLine] → render Detail page
+                                             │
+                                             │ (klik Export PDF di Detail)
+                                             ▼
+                              ┌────────────────────────────┐
+                              │  ReportGeneratorService       │
+                              │  .generate_code_comparison_   │
+                              │   report() — landscape, 2 kolom│
+                              └────────────────┬───────────────┘
+                                               ▼
+                                       bytes PDF → download_button
 ```
 
-`ReportGeneratorService` digambar sebagai cabang **paralel**, bukan kelanjutan linear dari pipeline — ia tidak pernah dipanggil otomatis saat analisis berjalan, melainkan hanya saat pengguna secara eksplisit menekan tombol *Export PDF* di halaman Comparisons (`list[ComparisonResult]` penuh) atau Result (satu `ComparisonResult` terpilih).
+`ReportGeneratorService` dipanggil pada **tiga titik berbeda**, semuanya *on-demand* (tidak pernah otomatis saat analisis berjalan):
+
+1. **Halaman Comparisons** → `generate_summary_report(list[ComparisonResult])` — laporan seluruh pasangan.
+2. **Halaman Result** → `generate_detail_report(ComparisonResult)` — laporan satu pasangan project, breakdown per file.
+3. **Halaman Detail** → `generate_code_comparison_report(comparison, file_pair, highlighted_a, highlighted_b)` — **berbeda dari dua titik lainnya**: method ini dipanggil *setelah* `HighlightService` selesai, karena ia butuh `list[HighlightedLine]` sebagai input, bukan langsung dari `ComparisonResult`. Inilah satu-satunya titik di mana `ReportGeneratorService` berada di hilir `HighlightService`, bukan paralel terhadapnya.
