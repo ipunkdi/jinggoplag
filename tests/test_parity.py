@@ -334,6 +334,28 @@ class ParityTestSuite:
             len(detail_pdf) > 0,
         )
 
+    def test_code_comparison_report(self, raw1: str, raw2: str, fp1, fp2, results) -> None:
+        """T13 — Laporan PDF kode berdampingan (landscape) valid dari hasil nyata."""
+        print("\n[T13] Code Comparison PDF Report")
+        hl_svc  = HighlightService()
+        matched = results[0].file_pairs[0].matched_hashes
+
+        highlighted_a = hl_svc.highlight(raw1, fp1.hash_positions, matched)
+        highlighted_b = hl_svc.highlight(raw2, fp2.hash_positions, matched)
+
+        report_svc = ReportGeneratorService()
+        code_pdf = report_svc.generate_code_comparison_report(
+            results[0], results[0].file_pairs[0], highlighted_a, highlighted_b,
+        )
+        self._assert(
+            "Code comparison PDF: header %PDF valid",
+            code_pdf[:4] == b"%PDF",
+        )
+        self._assert(
+            "Code comparison PDF: ukuran > 0 byte",
+            len(code_pdf) > 0,
+        )
+
     def run(self) -> bool:
         """Jalankan seluruh suite dan kembalikan True jika semua lulus."""
         print("=" * 60)
@@ -378,6 +400,7 @@ class ParityTestSuite:
         self.test_single_project_raises()
         self.test_no_code_files_raises()
         self.test_pdf_report_generation(results)
+        self.test_code_comparison_report(raw1, raw2, fp1, fp2, results)
 
         total = self.passed + self.failed
         print()

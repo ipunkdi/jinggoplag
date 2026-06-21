@@ -6,15 +6,18 @@ pada baris kode yang memiliki fingerprint identik.
 
 Baris kuning = fingerprint cocok dengan pasangan file-nya.
 Baris putih  = tidak ada kemiripan yang terdeteksi.
+Tombol "Export PDF" → unduh laporan kode berdampingan (landscape, dua kolom).
 """
 
 import html as html_module
+from datetime import datetime
 
 import streamlit as st
 
-from components.step_indicator import render_step_indicator
-from pages.checker_comparisons import _threshold_badge
-from services.highlighter      import HighlightService, HighlightedLine
+from components.step_indicator  import render_step_indicator
+from pages.checker_comparisons  import _threshold_badge
+from services.highlighter       import HighlightService, HighlightedLine
+from services.report_generator  import ReportGeneratorService
 
 ROUTE_RESULT = "checker_result"
 
@@ -53,16 +56,6 @@ def render(navigate_to) -> None:
         unsafe_allow_html=True,
     )
 
-    badge = _threshold_badge(file_pair.similarity, file_pair.threshold)
-    st.markdown(
-        f"""
-        <p style="text-align:center; font-size:0.92rem; color:#555; margin-bottom:1.2rem;">
-            Average Similarity: {badge}
-        </p>
-        """,
-        unsafe_allow_html=True,
-    )
-
     fingerprint_data = st.session_state.get("fingerprint_data", {})
     matched_hashes   = file_pair.matched_hashes
 
@@ -85,6 +78,20 @@ def render(navigate_to) -> None:
         hash_positions=fp_b.hash_positions if fp_b else [],
         matched_hashes=matched_hashes,
     )
+
+    badge = _threshold_badge(file_pair.similarity, file_pair.threshold)
+    col_badge, col_export = st.columns([4, 1.3])
+    with col_badge:
+        st.markdown(
+            f"""
+            <p style="text-align:center; font-size:0.92rem; color:#555; margin-bottom:1.2rem;">
+                Average Similarity: {badge}
+            </p>
+            """,
+            unsafe_allow_html=True,
+        )
+    with col_export:
+        _render_export_button(comparison, file_pair, highlighted_a, highlighted_b)
 
     stats_a = HighlightService.compute_match_stats(highlighted_a)
     stats_b = HighlightService.compute_match_stats(highlighted_b)
@@ -258,3 +265,26 @@ def _build_code_html(highlighted_lines: list[HighlightedLine]) -> str:
         rows.append(row)
 
     return "\n".join(rows)
+
+
+def _render_export_button(comparison, file_pair, highlighted_a: list, highlighted_b: list) -> None:
+    """
+    Render tombol unduh laporan PDF kode berdampingan (landscape, dua kolom).
+
+    PDF dihasilkan langsung saat halaman dirender, disuguhkan sebagai SATU
+    tombol unduh — sekali klik langsung memicu download browser.
+    """
+    report_service = ReportGeneratorService()
+    pdf_bytes = report_service.generate_code_comparison_report(
+        comparison, file_pair, highlighted_a, highlighted_b
+    )
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+
+    st.download_button(
+        label="📄 Export PDF",
+        data=pdf_bytes,
+        file_name=f"jinggoplag_kode_{timestamp}.pdf",
+        mime="application/pdf",
+        key="btn_export_code",
+        use_container_width=True,
+    )

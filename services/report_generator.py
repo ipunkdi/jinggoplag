@@ -23,7 +23,7 @@ import io
 from datetime import datetime
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import (
@@ -89,6 +89,14 @@ class ReportGeneratorService:
             "Footer", parent=base_styles["Normal"],
             fontSize=8, textColor=GRAY_TEXT,
         )
+        self.style_code = ParagraphStyle(
+            "CodeLine", parent=base_styles["Normal"],
+            fontName="Courier", fontSize=7, leading=9, textColor=DARK_TEXT,
+        )
+        self.style_line_number = ParagraphStyle(
+            "LineNumber", parent=base_styles["Normal"],
+            fontName="Courier", fontSize=7, leading=9, textColor=GRAY_TEXT,
+        )
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -150,15 +158,69 @@ class ReportGeneratorService:
                   onLaterPages=self._draw_page_footer)
         return buffer.getvalue()
 
+    def generate_code_comparison_report(
+        self,
+        comparison,
+        file_pair,
+        highlighted_a: list,
+        highlighted_b: list,
+    ) -> bytes:
+        """
+        Hasilkan laporan kode berdampingan dengan highlight baris identik.
+
+        Menggunakan orientasi *landscape* agar dua kolom kode muat tanpa
+        terpotong. Cocok dilampirkan sebagai bukti konkret saat berdiskusi
+        dengan mahasiswa terkait — bukan hanya angka persentase, melainkan
+        baris kode spesifik yang terindikasi identik.
+
+        Args:
+            comparison:    ComparisonResult induk (untuk nama project).
+            file_pair:     FilePairResult yang dipilih.
+            highlighted_a: list[HighlightedLine] untuk file di project A.
+            highlighted_b: list[HighlightedLine] untuk file di project B.
+
+        Returns:
+            Konten PDF sebagai bytes, siap dikirim via st.download_button.
+        """
+        buffer = io.BytesIO()
+        doc    = self._build_document(buffer, landscape_mode=True)
+
+        story: list = []
+        story.extend(self._build_header(
+            "Laporan Perbandingan Kode",
+            f"{file_pair.file_a}  vs  {file_pair.file_b}",
+        ))
+        story.extend(self._build_overall_score_block(file_pair))
+        story.append(self._build_file_path_labels(comparison, file_pair))
+        story.append(Spacer(1, 4))
+        story.append(self._build_code_comparison_table(highlighted_a, highlighted_b))
+        story.append(self._build_legend())
+        story.extend(self._build_footer_note())
+
+        doc.build(story, onFirstPage=self._draw_page_footer,
+                  onLaterPages=self._draw_page_footer)
+        return buffer.getvalue()
+
     # ── Document setup ───────────────────────────────────────────────────────
 
     @staticmethod
-    def _build_document(buffer: io.BytesIO) -> SimpleDocTemplate:
-        """Buat SimpleDocTemplate dengan margin dan ukuran halaman standar."""
+    def _build_document(buffer: io.BytesIO, landscape_mode: bool = False) -> SimpleDocTemplate:
+        """
+        Buat SimpleDocTemplate dengan margin dan ukuran halaman standar.
+
+        Args:
+            buffer:         Target BytesIO untuk output PDF.
+            landscape_mode: True untuk laporan perbandingan kode dua kolom
+                             (butuh lebar ekstra), False untuk laporan
+                             tabular standar (portrait).
+        """
+        page_size = landscape(A4) if landscape_mode else A4
+        margin    = 1.5 * cm if landscape_mode else 2.0 * cm
+
         return SimpleDocTemplate(
-            buffer, pagesize=A4,
-            topMargin=2.0 * cm, bottomMargin=2.0 * cm,
-            leftMargin=2.0 * cm, rightMargin=2.0 * cm,
+            buffer, pagesize=page_size,
+            topMargin=margin, bottomMargin=margin,
+            leftMargin=margin, rightMargin=margin,
             title="Laporan Jinggo Plag",
         )
 
@@ -307,6 +369,126 @@ class ReportGeneratorService:
         table.setStyle(TableStyle(style_commands))
         return table
 
+    def _build_file_path_labels(self, comparison, file_pair) -> Table:
+        """Bangun label dua kolom berisi path lengkap file A dan file B."""
+        full_path_a = f"{comparison.project_a}/{file_pair.file_a}"
+        full_path_b = f"{comparison.project_b}/{file_pair.file_b}"
+
+        label_style = ParagraphStyle(
+            "PathLabel", fontName="Courier", fontSize=8, textColor=GRAY_TEXT,
+        )
+        rows = [[
+            Paragraph(self._truncate(full_path_a, 90), label_style),
+            Paragraph(self._truncate(full_path_b, 90), label_style),
+        ]]
+        table = Table(rows, colWidths=[13 * cm, 13 * cm])
+        table.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, -1), colors.HexColor("#F5F5F5")),
+            ("TOPPADDING",    (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+            ("LINEBELOW",     (0, 0), (-1, -1), 0.5, LIGHT_BORDER),
+        ]))
+        return table
+
+    def _build_code_comparison_table(
+        self, highlighted_a: list, highlighted_b: list,
+    ) -> Table:
+        """
+        Bangun tabel kode dua kolom dengan latar kuning pada baris matched.
+
+        Menyandingkan baris-per-baris berdasarkan indeks (bukan nomor baris
+        asli), karena dua file dibandingkan bisa berbeda jumlah baris —
+        kolom yang lebih pendek diisi baris kosong agar tabel tetap rapi.
+
+        Args:
+            highlighted_a: list[HighlightedLine] untuk panel kiri.
+            highlighted_b: list[HighlightedLine] untuk panel kanan.
+
+        Returns:
+            Table siap ditambahkan ke story, dengan repeatRows untuk header.
+        """
+        header = ["#", "Source A", "#", "Source B"]
+        rows: list = [header]
+
+        max_len = max(len(highlighted_a), len(highlighted_b))
+        for i in range(max_len):
+            line_a = highlighted_a[i] if i < len(highlighted_a) else None
+            line_b = highlighted_b[i] if i < len(highlighted_b) else None
+
+            rows.append([
+                str(line_a.line_number) if line_a else "",
+                Paragraph(self._escape_code(line_a.content), self.style_code)
+                    if line_a else "",
+                str(line_b.line_number) if line_b else "",
+                Paragraph(self._escape_code(line_b.content), self.style_code)
+                    if line_b else "",
+            ])
+
+        col_widths = [1 * cm, 12 * cm, 1 * cm, 12 * cm]
+        table = Table(rows, colWidths=col_widths, repeatRows=1)
+
+        style_commands = [
+            ("BACKGROUND",    (0, 0), (-1, 0),  DARK_TEXT),
+            ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
+            ("FONTNAME",      (0, 0), (-1, 0),  "Helvetica-Bold"),
+            ("FONTSIZE",      (0, 0), (-1, 0),  8),
+            ("FONTNAME",      (0, 1), (0, -1),  "Courier"),
+            ("FONTNAME",      (2, 1), (2, -1),  "Courier"),
+            ("FONTSIZE",      (0, 1), (0, -1),  7),
+            ("FONTSIZE",      (2, 1), (2, -1),  7),
+            ("TEXTCOLOR",     (0, 1), (0, -1),  GRAY_TEXT),
+            ("TEXTCOLOR",     (2, 1), (2, -1),  GRAY_TEXT),
+            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+            ("ALIGN",         (0, 1), (0, -1),  "RIGHT"),
+            ("ALIGN",         (2, 1), (2, -1),  "RIGHT"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 1.5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+            ("LINEAFTER",     (1, 0), (1, -1),  0.5, LIGHT_BORDER),
+        ]
+
+        for row_idx in range(1, len(rows)):
+            line_a = highlighted_a[row_idx - 1] if row_idx - 1 < len(highlighted_a) else None
+            line_b = highlighted_b[row_idx - 1] if row_idx - 1 < len(highlighted_b) else None
+
+            if line_a is not None and line_a.is_match:
+                style_commands.append(
+                    ("BACKGROUND", (0, row_idx), (1, row_idx), colors.HexColor("#FFF176"))
+                )
+            if line_b is not None and line_b.is_match:
+                style_commands.append(
+                    ("BACKGROUND", (2, row_idx), (3, row_idx), colors.HexColor("#FFF176"))
+                )
+
+        table.setStyle(TableStyle(style_commands))
+        return table
+
+    def _build_legend(self) -> Table:
+        """Bangun legenda warna highlight di bawah tabel kode."""
+        rows = [[
+            "",
+            Paragraph(
+                '<font color="#999999">■</font> Tidak ada kemiripan &nbsp;&nbsp;&nbsp;'
+                '<font backColor="#FFF176">■</font> Fingerprint identik (matched)',
+                ParagraphStyle("Legend", fontSize=8, textColor=DARK_TEXT),
+            ),
+        ]]
+        table = Table(rows, colWidths=[1 * cm, 25 * cm])
+        table.setStyle(TableStyle([
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        return table
+
+    @staticmethod
+    def _escape_code(text: str) -> str:
+        """Escape karakter khusus XML agar aman dirender sebagai Paragraph."""
+        return (
+            text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+        ) or "&nbsp;"
+
     def _build_footer_note(self) -> list:
         """Bangun catatan kaki metodologis di akhir laporan."""
         note = (
@@ -346,13 +528,14 @@ class ReportGeneratorService:
         return text[: max_len - 1] + "…"
 
     @staticmethod
-    def _draw_page_footer(canvas, doc) -> None:  # noqa: ARG004
+    def _draw_page_footer(canvas, doc) -> None:
         """Gambar nomor halaman dan label brand di footer setiap halaman."""
         canvas.saveState()
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(GRAY_TEXT)
-        canvas.drawString(2 * cm, 1.2 * cm, "Dihasilkan oleh Jinggo Plag")
+        page_width = doc.pagesize[0]
+        canvas.drawString(2 * cm, 1.0 * cm, "Dihasilkan oleh Jinggo Plag")
         canvas.drawRightString(
-            A4[0] - 2 * cm, 1.2 * cm, f"Halaman {doc.page}"
+            page_width - 2 * cm, 1.0 * cm, f"Halaman {doc.page}"
         )
         canvas.restoreState()
