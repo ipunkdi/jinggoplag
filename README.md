@@ -43,10 +43,11 @@ Seluruh pemrosesan berjalan **di memori (volatile)** selama satu sesi — tidak 
 - **Deteksi otomatis struktur arsip** — mendeteksi dan menghapus *wrapper folder* (mis. hasil "Compress to ZIP" yang membungkus semua folder ke satu folder induk tambahan).
 - **Tahan terhadap modifikasi kosmetik dan penyalinan sebagian** — *preprocessing* menghapus komentar, *whitespace*, dan perbedaan kapitalisasi sebelum analisis, sehingga sistem tidak mudah dikelabui oleh perubahan format semata. Karena Jaccard Similarity dihitung dari rasio *fingerprint* yang cocok, *partial copying* (menyalin sebagian fungsi/blok kode lalu menulis sisanya secara mandiri) tetap terdeteksi secara **proporsional** — skor mencerminkan porsi yang benar-benar disalin, dan fitur *highlight* menandai persis baris mana yang identik.
 - **Pelaporan bertingkat** — alur empat langkah: ringkasan antar-*project* → rincian antar-*file* → inspeksi baris kode dengan sorotan kuning pada bagian yang identik.
+- **Visualisasi graf kemiripan** — tampilan jaringan interaktif di mana setiap mahasiswa adalah simpul dan garis menghubungkan pasangan yang melampaui ambang kemiripan yang dapat disetel, sehingga *klaster* mahasiswa yang saling menyalin terlihat seketika — khususnya berguna saat ada puluhan *submission* dalam satu kelas.
 - **Export laporan PDF** — unduh laporan ringkasan seluruh pasangan (cocok untuk dokumentasi satu kelas/angkatan), laporan detail satu pasangan project, maupun laporan kode berdampingan dengan *highlight* (format *landscape*, cocok dilampirkan sebagai bukti konkret) — langsung dari antarmuka, tanpa instalasi tambahan.
 - **Kategorisasi ambang batas** — hasil persentase dikelompokkan otomatis ke kategori Rendah (`< 30%`), Moderat (`30–80%`), dan Tinggi (`> 80%`).
 - **Privasi by design** — tanpa basis data, tanpa penulisan file ke disk; seluruh state hilang begitu sesi berakhir.
-- **Teruji & terverifikasi** — 45 *automated test case* yang membandingkan hasil komputasi sistem dengan perhitungan manual (lihat [Pengujian](#pengujian)).
+- **Teruji & terverifikasi** — 55 *automated test case* yang membandingkan hasil komputasi sistem dengan perhitungan manual (lihat [Pengujian](#pengujian)).
 
 ## Arsitektur Sistem
 
@@ -144,12 +145,14 @@ jinggoplag/
 │   ├── fingerprint.py           #   FingerprintService — K-Gram, Rolling Hash Rabin-Karp, Winnowing
 │   ├── similarity.py            #   SimilarityService — Jaccard, Best Match Only, kategorisasi threshold
 │   ├── highlighter.py           #   HighlightService — petakan matched hash ke nomor baris asli
-│   └── report_generator.py      #   ReportGeneratorService — export PDF (ringkasan, detail, kode berdampingan)
+│   ├── report_generator.py      #   ReportGeneratorService — export PDF (ringkasan, detail, kode berdampingan)
+│   └── graph_service.py         #   GraphService — graf kemiripan (networkx spring layout → SVG interaktif)
 │
 ├── pages/                       # Satu file per halaman wizard
 │   ├── home.py                  #   Landing page dengan tombol CTA "ANALYSIS NOW"
 │   ├── checker_upload.py        #   Step 1 — upload .zip, jalankan pipeline analisis penuh
-│   ├── checker_comparisons.py   #   Step 2 — tabel semua pasangan project, tombol Export PDF ringkasan
+│   ├── checker_comparisons.py   #   Step 2 — tabel semua pasangan project, tombol Graf & Export PDF
+│   ├── checker_graph.py         #   Step 2 (alternatif) — visualisasi graf jaringan kemiripan
 │   ├── checker_result.py        #   Step 3 — breakdown per file dalam satu pasangan, Export PDF detail
 │   ├── checker_detail.py        #   Step 4 — kode berdampingan dengan highlight, Export PDF kode
 │   └── about.py                 #   Halaman statis: flowchart algoritma, tahapan proses, kredit
@@ -163,7 +166,7 @@ jinggoplag/
 │   └── main.css                  # Stylesheet global: tema hitam-oranye, sembunyikan chrome Streamlit
 │
 ├── tests/
-│   ├── test_parity.py            # 45 automated test — paritas Excel vs sistem (lihat bagian Pengujian)
+│   ├── test_parity.py            # 55 automated test — paritas Excel vs sistem (lihat bagian Pengujian)
 │   └── fixtures/
 │       └── submissions.zip       # Data uji nyata (2 project root, ground truth terverifikasi manual)
 │
@@ -229,7 +232,7 @@ pip install -r requirements-dev.txt
 pytest tests/test_parity.py -v
 ```
 
-Cakupan pengujian (45 *assertion*, 13 kelompok):
+Cakupan pengujian (55 *assertion*, 14 kelompok):
 
 | Kelompok | Yang Diverifikasi |
 |---|---|
@@ -246,6 +249,7 @@ Cakupan pengujian (45 *assertion*, 13 kelompok):
 | T11 | Penanganan *error* — tidak ada *file* berekstensi yang didukung |
 | T12 | *Export* PDF — header `%PDF` valid dan ukuran berkas > 0 byte untuk laporan ringkasan & detail |
 | T13 | *Export* PDF kode berdampingan (*landscape*) — header `%PDF` valid dan ukuran berkas > 0 byte untuk laporan kode dengan *highlight* |
+| T14 | Visualisasi Graf — `GraphService` menghasilkan NetworkX Graph, statistik, dan SVG valid (ada `<circle>` dan `</svg>`) dari hasil nyata; graf kosong tidak *crash* |
 
 Detail metodologi pengujian (termasuk *black-box testing* alur UI) ada di [`docs/TESTING.md`](docs/TESTING.md).
 

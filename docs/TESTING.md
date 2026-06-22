@@ -23,7 +23,7 @@ pytest tests/test_parity.py -v
 
 `tests/fixtures/submissions.zip` berisi dua *project root* nyata (`ML-D_362258302025_Marimar/main.py` dan `ML-D_362258302026_Pulgoso/tugas.py`) — program CRUD sederhana dengan kemiripan struktural sebagian, hasil dari pengujian skenario nyata yang juga dihitung manual di Excel.
 
-### Cakupan 45 Assertion (13 Kelompok)
+### Cakupan 55 Assertion (14 Kelompok)
 
 | ID | Nama | Apa yang Dibuktikan |
 |---|---|---|
@@ -40,6 +40,7 @@ pytest tests/test_parity.py -v
 | T11 | No Supported Files Error | `ValueError` informatif saat tidak ada `.py`/`.php`/`.dart` ditemukan |
 | T12 | PDF Report Generation | Header `%PDF` valid dan ukuran berkas > 0 byte untuk `summary_report` dan `detail_report`, menggunakan data nyata dari fixture |
 | T13 | Code Comparison PDF Report | Header `%PDF` valid dan ukuran berkas > 0 byte untuk laporan kode berdampingan (*landscape*) dengan data *highlight* nyata |
+| T14 | Graph Visualization | `GraphService` menghasilkan NetworkX Graph, statistik, dan SVG valid (ada `<circle>` dan `</svg>`) dari hasil nyata; penanganan graf kosong tidak *crash* |
 
 ### Integrasi Continuous Integration
 

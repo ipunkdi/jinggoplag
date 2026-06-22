@@ -19,8 +19,9 @@ Dokumen ini menjelaskan keputusan desain arsitektural Jinggo Plag secara rinci, 
 | `SimilarityService` | `dict[project][file] -> FingerprintResult` | `list[ComparisonResult]` | Streamlit, *service* lain |
 | `HighlightService` | `original_text` + `hash_positions` + `matched_hashes` | `list[HighlightedLine]` | Streamlit, *service* lain |
 | `ReportGeneratorService` | `list[ComparisonResult]`, satu `ComparisonResult`, atau (`ComparisonResult` + `FilePairResult` + 2× `list[HighlightedLine]`) | `bytes` PDF | Streamlit, *service* lain |
+| `GraphService` | `list[ComparisonResult]` + `min_similarity` float | NetworkX `Graph` + string SVG interaktif | Streamlit, *service* lain |
 
-Lima *service* pertama (`ZipExtractorService` s.d. `HighlightService`) membentuk **pipeline deteksi inti** yang berurutan — dipanggil langsung saat analisis berjalan (lihat diagram di bawah). `ReportGeneratorService` **bukan bagian dari pipeline inti**; ia adalah *service* presentasi yang dipanggil *on-demand* dari `pages/checker_comparisons.py` dan `pages/checker_result.py` saat pengguna menekan tombol *Export PDF*, mengonsumsi *output* yang sudah ada (`ComparisonResult`) tanpa melakukan komputasi *similarity* baru. Pemisahan ini sengaja dijaga agar logika algoritma deteksi tetap terisolasi dari logika *output*/pelaporan.
+Lima *service* pertama (`ZipExtractorService` s.d. `HighlightService`) membentuk **pipeline deteksi inti** yang berurutan — dipanggil langsung saat analisis berjalan (lihat diagram di bawah). `ReportGeneratorService` dan `GraphService` **bukan bagian dari pipeline inti**; keduanya adalah *service* presentasi yang dipanggil *on-demand* dari lapisan UI — `ReportGeneratorService` saat pengguna menekan tombol *Export PDF*, dan `GraphService` saat pengguna membuka halaman Graf Kemiripan. Kedua *service* ini mengonsumsi *output* yang sudah ada (`ComparisonResult` dan/atau `HighlightedLine`) tanpa melakukan komputasi *similarity* baru. Pemisahan ini sengaja dijaga agar logika algoritma deteksi tetap terisolasi dari logika *output*/pelaporan/visualisasi.
 
 Setiap *service* adalah kelas independen tanpa *dependency* satu sama lain secara langsung — orkestrasi pipeline inti (memanggil lima *service* deteksi secara berurutan) dilakukan oleh `pages/checker_upload.py::_run_pipeline_steps`, BUKAN oleh *service* itu sendiri. Ini memungkinkan setiap *service* diuji dalam isolasi penuh.
 
@@ -87,32 +88,33 @@ Streamlit mewajibkan `set_page_config()` menjadi *Streamlit command* **pertama y
                                   ▼
                      list[ComparisonResult] → session_state
                                   │
-            ┌─────────────────────┼─────────────────────┐
-            │ (klik Export PDF     │ (pengguna memilih    │ (klik Export PDF
-            │  di Comparisons)     │  pasangan)            │  di Result)
-            ▼                     │                       ▼
- ┌───────────────────────┐        │          ┌───────────────────────┐
- │ ReportGeneratorService  │        │          │ ReportGeneratorService  │
- │ .generate_summary_      │        │          │ .generate_detail_       │
- │  report()                │        │          │  report()                │
- └────────────┬────────────┘        │          └────────────┬────────────┘
-              ▼                     ▼                       ▼
-      bytes PDF                ┌────────────────────────┐   bytes PDF
-      → download_button        │   HighlightService       │   → download_button
+       ┌──────────────────────────┼─────────────────────────────┐
+       │ (klik Export PDF         │ (pengguna memilih            │ (klik Export PDF
+       │  di Comparisons)         │  pasangan)                    │  di Result)
+       ▼                          │                               ▼
+┌───────────────────────┐         │              ┌───────────────────────┐
+│ ReportGeneratorService  │         │              │ ReportGeneratorService  │
+│ .generate_summary_      │         │              │ .generate_detail_       │
+│  report()                │         │              │  report()                │
+└────────────┬────────────┘         │              └────────────┬────────────┘
+             ▼                      ▼                           ▼
+     bytes PDF                 ┌────────────────────────┐  bytes PDF
+     → download_button         │   HighlightService       │  → download_button
                                 │   (char pos → baris)     │
-                                └────────────┬────────────┘
-                                             ▼
-                              list[HighlightedLine] → render Detail page
-                                             │
-                                             │ (klik Export PDF di Detail)
-                                             ▼
-                              ┌────────────────────────────┐
-                              │  ReportGeneratorService       │
-                              │  .generate_code_comparison_   │
-                              │   report() — landscape, 2 kolom│
-                              └────────────────┬───────────────┘
-                                               ▼
-                                       bytes PDF → download_button
+       ┌────────────────────────└────────────┬────────────┘
+       │ (klik Graf Kemiripan)               │
+       ▼                                     ▼
+┌──────────────────────────┐  list[HighlightedLine] → render Detail page
+│  GraphService              │               │
+│  .build_graph()            │               │ (klik Export PDF di Detail)
+│  .render_svg()             │               ▼
+└────────────┬───────────────┘  ┌────────────────────────────────┐
+             ▼                   │  ReportGeneratorService          │
+   SVG string → checker_graph    │  .generate_code_comparison_      │
+   (halaman alternatif Step 2)   │   report() — landscape, 2 kolom  │
+                                 └────────────────┬─────────────────┘
+                                                  ▼
+                                          bytes PDF → download_button
 ```
 
 `ReportGeneratorService` dipanggil pada **tiga titik berbeda**, semuanya *on-demand* (tidak pernah otomatis saat analisis berjalan):
@@ -120,3 +122,5 @@ Streamlit mewajibkan `set_page_config()` menjadi *Streamlit command* **pertama y
 1. **Halaman Comparisons** → `generate_summary_report(list[ComparisonResult])` — laporan seluruh pasangan.
 2. **Halaman Result** → `generate_detail_report(ComparisonResult)` — laporan satu pasangan project, breakdown per file.
 3. **Halaman Detail** → `generate_code_comparison_report(comparison, file_pair, highlighted_a, highlighted_b)` — **berbeda dari dua titik lainnya**: method ini dipanggil *setelah* `HighlightService` selesai, karena ia butuh `list[HighlightedLine]` sebagai input, bukan langsung dari `ComparisonResult`. Inilah satu-satunya titik di mana `ReportGeneratorService` berada di hilir `HighlightService`, bukan paralel terhadapnya.
+
+`GraphService` dipanggil dari **halaman Graf Kemiripan** (alternatif tampilan Step 2, diakses via tombol di halaman Comparisons). Ia mengonsumsi `list[ComparisonResult]` yang sudah ada di `session_state`, membangun NetworkX Graph berdasarkan filter minimum similarity yang dipilih pengguna, lalu menghasilkan SVG interaktif yang di-render via `st.components.v1.html`.
