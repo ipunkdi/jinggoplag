@@ -385,8 +385,8 @@ class ParityTestSuite:
         self._assert("SVG: mengandung node <circle>", "<circle" in svg)
 
         # SVG kosong (tidak crash jika tidak ada data)
-        G_empty = svc.build_graph([], min_similarity=0.0)
-        svg_empty = svc.render_svg(G_empty)
+        graph_empty = svc.build_graph([], min_similarity=0.0)
+        svg_empty   = svc.render_svg(graph_empty)
         self._assert("SVG kosong: tidak crash", "<svg" in svg_empty)
 
     def run(self) -> bool:
