@@ -24,6 +24,7 @@ from services.extractor        import ZipExtractorService
 from services.fingerprint      import FingerprintService
 from services.highlighter      import HighlightService
 from services.preprocessor     import PreprocessorService
+from services.graph_service    import GraphService
 from services.report_generator import ReportGeneratorService
 from services.similarity       import SimilarityService
 
@@ -356,6 +357,38 @@ class ParityTestSuite:
             len(code_pdf) > 0,
         )
 
+    def test_graph_visualization(self, results) -> None:
+        """T14 — GraphService menghasilkan graf dan SVG valid dari hasil nyata."""
+        print("\n[T14] Graph Visualization")
+        svc = GraphService()
+
+        # Build graph dengan filter 0% (semua edge)
+        graph_all = svc.build_graph(results, min_similarity=0.0)
+        self._assert("Graph (≥0%): node ada", graph_all.number_of_nodes() > 0)
+        self._assert("Graph (≥0%): edge ada", graph_all.number_of_edges() > 0)
+
+        # Build graph dengan filter 50%
+        graph_50 = svc.build_graph(results, min_similarity=50.0)
+        self._assert("Graph (≥50%): jumlah node == total project",
+                     graph_50.number_of_nodes() == graph_all.number_of_nodes())
+
+        # Stats
+        stats = svc.graph_stats(graph_all)
+        self._assert("Stats: node_count > 0",   stats["node_count"] > 0)
+        self._assert("Stats: component_count > 0", stats["component_count"] > 0)
+        self._assert("Stats: largest_cluster > 0", stats["largest_cluster"] > 0)
+
+        # SVG
+        svg = svc.render_svg(graph_all)
+        self._assert("SVG: dimulai dengan <svg",  svg.strip().startswith("<svg"))
+        self._assert("SVG: diakhiri dengan </svg>", "</svg>" in svg)
+        self._assert("SVG: mengandung node <circle>", "<circle" in svg)
+
+        # SVG kosong (tidak crash jika tidak ada data)
+        G_empty = svc.build_graph([], min_similarity=0.0)
+        svg_empty = svc.render_svg(G_empty)
+        self._assert("SVG kosong: tidak crash", "<svg" in svg_empty)
+
     def run(self) -> bool:
         """Jalankan seluruh suite dan kembalikan True jika semua lulus."""
         print("=" * 60)
@@ -401,6 +434,7 @@ class ParityTestSuite:
         self.test_no_code_files_raises()
         self.test_pdf_report_generation(results)
         self.test_code_comparison_report(raw1, raw2, fp1, fp2, results)
+        self.test_graph_visualization(results)
 
         total = self.passed + self.failed
         print()
