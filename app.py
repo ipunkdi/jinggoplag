@@ -28,6 +28,7 @@ from components.navbar         import render_navbar
 from pages.about                import render as render_about
 from pages.checker_comparisons  import render as render_comparisons
 from pages.checker_detail       import render as render_detail
+from pages.checker_graph        import render as render_graph
 from pages.checker_result       import render as render_result
 from pages.checker_upload       import render as render_upload
 from pages.home                 import render as render_home
@@ -38,6 +39,7 @@ ROUTE_COMPARISONS  = "checker_comparisons"
 ROUTE_RESULT       = "checker_result"
 ROUTE_DETAIL       = "checker_detail"
 ROUTE_ABOUT        = "about"
+ROUTE_GRAPH        = "checker_graph"
 
 
 def _init_session_state() -> None:
@@ -120,6 +122,10 @@ def _guard_route(route: str) -> str:
             st.warning("⚠️ Analisis belum dijalankan. Silakan unggah file terlebih dahulu.")
             return ROUTE_UPLOAD
 
+    elif route == ROUTE_GRAPH:
+        if st.session_state.get("comparison_results") is None:
+            return ROUTE_UPLOAD
+
     elif route == ROUTE_RESULT:
         if st.session_state.get("comparison_results") is None:
             return ROUTE_UPLOAD
@@ -151,6 +157,8 @@ def _render_current_page() -> None:
         render_upload(navigate_to=navigate_to, reset_analysis=reset_analysis)
     elif route == ROUTE_COMPARISONS:
         render_comparisons(navigate_to=navigate_to)
+    elif route == ROUTE_GRAPH:
+        render_graph(navigate_to=navigate_to)
     elif route == ROUTE_RESULT:
         render_result(navigate_to=navigate_to)
     elif route == ROUTE_DETAIL:

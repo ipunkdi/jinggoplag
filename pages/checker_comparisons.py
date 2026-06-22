@@ -4,7 +4,8 @@ Halaman Checker Comparisons (Step 2).
 Menampilkan tabel "Top Comparisons" berisi semua pasangan proyek
 diurutkan dari similarity tertinggi, dengan badge threshold berwarna.
 Klik ikon mata → navigasi ke halaman Result (Step 3).
-Tombol "Export PDF" → unduh laporan ringkasan seluruh pasangan.
+Tombol "📊 Graf Kemiripan" → visualisasi jaringan kemiripan (Step 2 alternatif).
+Tombol "📄 Export PDF" → unduh laporan ringkasan seluruh pasangan.
 """
 
 from datetime import datetime
@@ -16,6 +17,7 @@ from services.report_generator  import ReportGeneratorService
 
 ROUTE_RESULT = "checker_result"
 ROUTE_UPLOAD = "checker_upload"
+ROUTE_GRAPH  = "checker_graph"
 
 
 def render(navigate_to) -> None:
@@ -53,7 +55,7 @@ def render(navigate_to) -> None:
     high_count = sum(1 for r in comparison_results if r.threshold == "High")
     mod_count  = sum(1 for r in comparison_results if r.threshold == "Moderate")
 
-    col_stats, col_export = st.columns([4, 1.3])
+    col_stats, col_graph, col_export = st.columns([4, 1.5, 1.3])
 
     with col_stats:
         st.markdown(
@@ -68,6 +70,16 @@ def render(navigate_to) -> None:
             """,
             unsafe_allow_html=True,
         )
+
+    with col_graph:
+        st.markdown("<div style='padding-top: 0.4rem;'></div>", unsafe_allow_html=True)
+        if st.button(
+            "📊 Graf Kemiripan",
+            key="btn_view_graph",
+            use_container_width=True,
+            help="Tampilkan visualisasi graf jaringan kemiripan antar project",
+        ):
+            navigate_to(ROUTE_GRAPH)
 
     with col_export:
         _render_export_button(comparison_results)
