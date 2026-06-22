@@ -60,67 +60,103 @@ Streamlit mewajibkan `set_page_config()` menjadi *Streamlit command* **pertama y
 
 ## Diagram Alur Data End-to-End
 
+Diagram dibagi dua bagian: **Pipeline Inti** (berjalan otomatis saat analisis) dan
+**Layanan Presentasi** (dipanggil *on-demand* saat pengguna meminta).
+
 ```
-┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   .zip      │────▶│ ZipExtractorService│───▶│ projects_raw     │
-│  (upload)   │     └──────────────────┘     │ {proj:{file:src}} │
-└─────────────┘                              └────────┬─────────┘
-                                                        │
-                     ┌──────────────────────┐          ▼
-                     │ PreprocessorService   │◀─────────┘
-                     │ (per file)             │
-                     └───────────┬────────────┘
-                                  ▼
-                     PreprocessedFile{original, processed,
-                                       language, char_map}
-                                  │
-                     ┌────────────▼───────────┐
-                     │  FingerprintService     │
-                     │  (K-Gram→Hash→Winnowing)│
-                     └────────────┬────────────┘
-                                  ▼
-                     FingerprintResult{fingerprints, hash_positions}
-                                  │
-                     ┌────────────▼───────────┐
-                     │  SimilarityService       │
-                     │  (Jaccard, Best Match)   │
-                     └────────────┬────────────┘
-                                  ▼
-                     list[ComparisonResult] → session_state
-                                  │
-       ┌──────────────────────────┼─────────────────────────────┐
-       │ (klik Export PDF         │ (pengguna memilih            │ (klik Export PDF
-       │  di Comparisons)         │  pasangan)                    │  di Result)
-       ▼                          │                               ▼
-┌───────────────────────┐         │              ┌───────────────────────┐
-│ ReportGeneratorService  │         │              │ ReportGeneratorService  │
-│ .generate_summary_      │         │              │ .generate_detail_       │
-│  report()                │         │              │  report()                │
-└────────────┬────────────┘         │              └────────────┬────────────┘
-             ▼                      ▼                           ▼
-     bytes PDF                 ┌────────────────────────┐  bytes PDF
-     → download_button         │   HighlightService       │  → download_button
-                                │   (char pos → baris)     │
-       ┌────────────────────────└────────────┬────────────┘
-       │ (klik Graf Kemiripan)               │
-       ▼                                     ▼
-┌──────────────────────────┐  list[HighlightedLine] → render Detail page
-│  GraphService              │               │
-│  .build_graph()            │               │ (klik Export PDF di Detail)
-│  .render_svg()             │               ▼
-└────────────┬───────────────┘  ┌────────────────────────────────┐
-             ▼                   │  ReportGeneratorService          │
-   SVG string → checker_graph    │  .generate_code_comparison_      │
-   (halaman alternatif Step 2)   │   report() — landscape, 2 kolom  │
-                                 └────────────────┬─────────────────┘
-                                                  ▼
-                                          bytes PDF → download_button
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PIPELINE INTI  (otomatis saat START ANALYSIS diklik)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────┐
+  │  .zip input │
+  └──────┬──────┘
+         │
+         ▼
+  ┌──────────────────────┐
+  │  ZipExtractorService │  → dict{ project → { file → source_code } }
+  └──────────────────────┘
+         │  (per file)
+         ▼
+  ┌──────────────────────┐
+  │  PreprocessorService │  → PreprocessedFile{ original, processed,
+  └──────────────────────┘                       language, char_map }
+         │
+         ▼
+  ┌──────────────────────┐
+  │  FingerprintService  │  → FingerprintResult{ fingerprints,
+  │  K-Gram → Hash →     │                       hash_positions }
+  │  Winnowing           │
+  └──────────────────────┘
+         │
+         ▼
+  ┌──────────────────────┐
+  │  SimilarityService   │  → list[ComparisonResult]
+  │  Jaccard + BestMatch │
+  └──────────────────────┘
+         │
+         ▼
+  session_state["comparison_results"]  ◀── disimpan di memori
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  LAYANAN PRESENTASI  (on-demand, hanya saat pengguna meminta)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  session_state["comparison_results"]
+         │
+         ├─────────────────────────────────────┐
+         │                                     │
+         │  (A) klik "📊 Graf Kemiripan"        │  (B) pengguna pilih pasangan
+         ▼                                     ▼
+  ┌─────────────────────┐             ┌──────────────────────┐
+  │    GraphService      │             │   HighlightService    │
+  │  .build_graph()      │             │   original + positions│
+  │  .render_svg()       │             │   + matched_hashes   │
+  └──────────┬──────────┘             └──────────┬───────────┘
+             │                                   │
+             ▼                                   ▼
+  SVG → checker_graph.py            list[HighlightedLine]
+  (halaman alternatif Step 2)                    │
+                                                 │
+         ┌───────────────────────────────────────┤
+         │                                       │
+         │  (C) klik "📄 Export PDF"              │  render di checker_detail.py
+         │      di Comparisons (summary)          │
+         ▼                                       │
+  ┌──────────────────────────────────────────┐   │
+  │  ReportGeneratorService                   │   │
+  │  .generate_summary_report()               │   │
+  │  → bytes PDF → download_button            │   │
+  └──────────────────────────────────────────┘   │
+                                                 │
+  session_state["comparison_results"]            │
+         │                                       │
+         │  (D) klik "📄 Export PDF"             │
+         │      di Result (detail)               │
+         ▼                                       │
+  ┌──────────────────────────────────────────┐   │
+  │  ReportGeneratorService                   │   │
+  │  .generate_detail_report()                │   │
+  │  → bytes PDF → download_button            │   │
+  └──────────────────────────────────────────┘   │
+                                                 │
+                          list[HighlightedLine] ──┘
+                                 │
+                                 │  (E) klik "📄 Export PDF"
+                                 │      di Detail (kode berdampingan)
+                                 ▼
+                  ┌──────────────────────────────────────────┐
+                  │  ReportGeneratorService                   │
+                  │  .generate_code_comparison_report()       │
+                  │  → bytes PDF landscape → download_button  │
+                  └──────────────────────────────────────────┘
 ```
 
-`ReportGeneratorService` dipanggil pada **tiga titik berbeda**, semuanya *on-demand* (tidak pernah otomatis saat analisis berjalan):
+**Penjelasan titik pemanggilan:**
 
-1. **Halaman Comparisons** → `generate_summary_report(list[ComparisonResult])` — laporan seluruh pasangan.
-2. **Halaman Result** → `generate_detail_report(ComparisonResult)` — laporan satu pasangan project, breakdown per file.
-3. **Halaman Detail** → `generate_code_comparison_report(comparison, file_pair, highlighted_a, highlighted_b)` — **berbeda dari dua titik lainnya**: method ini dipanggil *setelah* `HighlightService` selesai, karena ia butuh `list[HighlightedLine]` sebagai input, bukan langsung dari `ComparisonResult`. Inilah satu-satunya titik di mana `ReportGeneratorService` berada di hilir `HighlightService`, bukan paralel terhadapnya.
+- **(A)** `GraphService` — dipanggil dari `checker_graph.py`, mengonsumsi `list[ComparisonResult]` dari `session_state`, menghasilkan SVG graf jaringan dengan *spring layout* reproducible (seed=42).
+- **(B)** `HighlightService` — dipanggil dari `checker_detail.py`, memetakan hash yang cocok ke nomor baris di teks asli menggunakan `char_map`.
+- **(C)** `ReportGeneratorService.generate_summary_report()` — dipanggil dari `checker_comparisons.py`, menerima seluruh `list[ComparisonResult]`, menghasilkan laporan PDF ringkasan kelas penuh.
+- **(D)** `ReportGeneratorService.generate_detail_report()` — dipanggil dari `checker_result.py`, menerima satu `ComparisonResult`, menghasilkan laporan PDF breakdown per file.
+- **(E)** `ReportGeneratorService.generate_code_comparison_report()` — dipanggil dari `checker_detail.py` **setelah** `HighlightService` selesai, menerima `list[HighlightedLine]` sebagai input tambahan, menghasilkan PDF *landscape* dua kolom dengan highlight per baris.
 
-`GraphService` dipanggil dari **halaman Graf Kemiripan** (alternatif tampilan Step 2, diakses via tombol di halaman Comparisons). Ia mengonsumsi `list[ComparisonResult]` yang sudah ada di `session_state`, membangun NetworkX Graph berdasarkan filter minimum similarity yang dipilih pengguna, lalu menghasilkan SVG interaktif yang di-render via `st.components.v1.html`.
