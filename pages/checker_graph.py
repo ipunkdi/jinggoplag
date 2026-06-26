@@ -18,7 +18,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from components.step_indicator import render_step_indicator
-from services.graph_service    import GraphService
+from services.graph_service    import GraphService, CANVAS_WIDTH, CANVAS_HEIGHT
 
 ROUTE_COMPARISONS = "checker_comparisons"
 ROUTE_RESULT      = "checker_result"
@@ -134,22 +134,10 @@ def render(navigate_to) -> None:
             f"Coba geser slider ke nilai lebih rendah."
         )
 
-    # ── Render SVG graf ────────────────────────────────────────────────────────
-    svg_html = svc.render_svg(graph)
-
-    # Bungkus dalam div responsif dan tambahkan HTML untuk scrollbar
-    # jika jumlah node sangat besar
-    wrapped = f"""
-    <div style="
-        border-radius: 12px;
-        overflow: hidden;
-        border: 1.5px solid #EEEEEE;
-        background: #FAFAFA;
-    ">
-        {svg_html}
-    </div>
-    """
-    components.html(wrapped, height=580, scrolling=False)
+    # ── Render SVG graf dengan Pan & Zoom interaktif ───────────────────────────
+    svg_html  = svc.render_svg(graph)
+    full_html = _build_interactive_html(svg_html)
+    components.html(full_html, height=620, scrolling=False)
 
     # ── Legenda node terisolasi ────────────────────────────────────────────────
     if stats["isolated_count"] > 0:
@@ -257,3 +245,118 @@ def _render_top_pairs_table(
             f"Lihat tabel lengkap di halaman Comparisons.</p>",
             unsafe_allow_html=True,
         )
+
+
+def _build_interactive_html(svg_html: str) -> str:
+    """
+    Bungkus SVG dalam dokumen HTML penuh dengan JavaScript pan dan zoom.
+
+    Fitur:
+    - Scroll mouse → zoom in/out (terpusat pada posisi kursor)
+    - Drag (klik tahan + geser) → pan ke segala arah
+    - Tombol ↺ Reset → kembali ke tampilan awal
+    - Legend tetap FIXED di sudut kanan bawah (tidak ikut pan/zoom)
+
+    Fungsi ini harus dipakai bersama graph_service.render_svg() yang
+    menghasilkan SVG dengan id='jinggo-graph' dan <g id='graph-group'>
+    sebagai container yang ditransformasi oleh JavaScript.
+    """
+    vw = CANVAS_WIDTH
+    vh = CANVAS_HEIGHT
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{ background:#FAFAFA; overflow:hidden; font-family:sans-serif; }}
+  #wrapper {{ position:relative; width:100%; }}
+  #controls {{
+    position:absolute; top:10px; left:10px; z-index:20;
+    display:flex; align-items:center; gap:8px;
+  }}
+  #reset-btn {{
+    background:#FFFFFF; border:1.5px solid #CCCCCC;
+    border-radius:6px; padding:4px 12px;
+    font-size:11px; color:#555; cursor:pointer;
+    transition:border-color .15s, color .15s;
+    user-select:none;
+  }}
+  #reset-btn:hover {{ border-color:#E87722; color:#E87722; }}
+  #hint {{ font-size:10.5px; color:#AAAAAA; user-select:none; }}
+</style>
+</head>
+<body>
+<div id="wrapper">
+  <div id="controls">
+    <button id="reset-btn">&#8635; Reset</button>
+    <span id="hint">Scroll: zoom &bull; Drag: geser</span>
+  </div>
+  {svg_html}
+</div>
+<script>
+(function () {{
+  var VW = {vw};
+  var VH = {vh};
+  var svg = document.getElementById('jinggo-graph');
+  var grp = document.getElementById('graph-group');
+  if (!svg || !grp) return;
+
+  var s = 1, tx = 0, ty = 0;
+  var dragging = false, lx = 0, ly = 0;
+
+  function applyTransform() {{
+    grp.setAttribute('transform',
+      'translate(' + tx + ',' + ty + ') scale(' + s + ')');
+  }}
+
+  function toSVG(cx, cy) {{
+    var r   = svg.getBoundingClientRect();
+    return {{
+      x: (cx - r.left) * VW / r.width,
+      y: (cy - r.top)  * VH / r.height,
+    }};
+  }}
+
+  svg.addEventListener('wheel', function (e) {{
+    e.preventDefault();
+    var p  = toSVG(e.clientX, e.clientY);
+    var f  = e.deltaY < 0 ? 1.15 : (1 / 1.15);
+    var ns = Math.min(Math.max(0.1, s * f), 10);
+    tx = p.x - (p.x - tx) * (ns / s);
+    ty = p.y - (p.y - ty) * (ns / s);
+    s  = ns;
+    applyTransform();
+  }}, {{ passive: false }});
+
+  svg.addEventListener('mousedown', function (e) {{
+    if (e.button !== 0) return;
+    dragging = true;
+    var p = toSVG(e.clientX, e.clientY);
+    lx = p.x; ly = p.y;
+    svg.style.cursor = 'grabbing';
+    e.preventDefault();
+  }});
+
+  document.addEventListener('mousemove', function (e) {{
+    if (!dragging) return;
+    var p = toSVG(e.clientX, e.clientY);
+    tx += p.x - lx; ty += p.y - ly;
+    lx = p.x; ly = p.y;
+    applyTransform();
+  }});
+
+  document.addEventListener('mouseup', function () {{
+    if (dragging) {{ dragging = false; svg.style.cursor = 'grab'; }}
+  }});
+
+  var rb = document.getElementById('reset-btn');
+  if (rb) {{ rb.addEventListener('click', function () {{
+    s = 1; tx = 0; ty = 0; applyTransform();
+  }}); }}
+
+  svg.style.cursor = 'grab';
+}})();
+</script>
+</body>
+</html>"""

@@ -132,9 +132,11 @@ class GraphService:
         parts: list = [
             self._svg_header(width, height),
             self._svg_defs(),
+            '<g id="graph-group">',   # ← semua edge + node di sini agar JS pan/zoom bisa menargetkan
         ]
         parts.extend(self._render_edges(graph, canvas_pos))
         parts.extend(self._render_nodes(graph, canvas_pos, node_max_threshold))
+        parts.append("</g>")          # ← tutup graph-group (legend di LUAR agar tetap fixed)
         parts.append(self._render_legend(width, height))
         parts.append("</svg>")
 
@@ -189,9 +191,9 @@ class GraphService:
     @staticmethod
     def _svg_header(width: int, height: int) -> str:
         return (
-            f'<svg viewBox="0 0 {width} {height}" '
-            f'xmlns="http://www.w3.org/2000/svg" '
-            f'style="width:100%;background:#FAFAFA;'
+            f'<svg id="jinggo-graph" viewBox="0 0 {width} {height}" '
+            f'xmlns="http://www.w3.org/2000/svg" overflow="visible" '
+            f'style="width:100%;background:#FAFAFA;display:block;'
             f'border-radius:12px;border:1.5px solid #EEEEEE;">'
         )
 
