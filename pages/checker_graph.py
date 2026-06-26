@@ -15,7 +15,6 @@ Kembali: tombol "← Kembali ke Comparisons" atau navbar Plagiarism Checker.
 """
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from components.step_indicator import render_step_indicator
 from services.graph_service    import GraphService, CANVAS_WIDTH, CANVAS_HEIGHT
@@ -137,7 +136,7 @@ def render(navigate_to) -> None:
     # ── Render SVG graf dengan Pan & Zoom interaktif ───────────────────────────
     svg_html  = svc.render_svg(graph)
     full_html = _build_interactive_html(svg_html)
-    components.html(full_html, height=620, scrolling=False)
+    st.iframe(full_html, height=620, scrolling=False)
 
     # ── Legenda node terisolasi ────────────────────────────────────────────────
     if stats["isolated_count"] > 0:
