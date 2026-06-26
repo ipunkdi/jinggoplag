@@ -62,6 +62,11 @@ Pengujian *black-box* memverifikasi perilaku sistem dari sudut pandang pengguna 
 | H | Klik START ANALYSIS sebelum upload | *Edge* | Tombol dalam kondisi `disabled` | Tombol tidak responsif terhadap klik |
 | I | Navigasi langsung ke *route* tengah (mis. Comparisons) tanpa Upload | *Edge* | `_guard_route()` mengarahkan kembali ke Upload dengan peringatan | Tidak ada halaman kosong/*crash* |
 | J | `.zip` dengan *wrapper folder* (hasil "Compress to ZIP") | *Normal* | Sistem mendeteksi otomatis dan tetap berhasil mengekstrak | Analisis berjalan normal |
+| K | *Export* PDF Ringkasan (halaman Comparisons) | *Normal* | Browser langsung memicu unduhan `jinggoplag_ringkasan_*.pdf` tanpa langkah tambahan | File terunduh, dapat dibuka, berisi header "Laporan Ringkasan", tabel seluruh pasangan, dan statistik High/Moderate/Low |
+| L | *Export* PDF Detail (halaman Result) | *Normal* | Browser langsung memicu unduhan `jinggoplag_detail_*.pdf` | File terunduh, berisi nama Project A & B, skor Total Similarity, dan tabel pasangan file |
+| M | *Export* PDF Kode Berdampingan (halaman Detail) | *Normal* | Browser langsung memicu unduhan `jinggoplag_kode_*.pdf` | File terunduh, orientasi *landscape*, berisi dua kolom kode berdampingan dengan highlight kuning pada baris *fingerprint* identik |
+| N | Visualisasi Graf Kemiripan — tampil dan filter | *Normal* | Klik "📊 Graf Kemiripan" → halaman Graf tampil dengan SVG, 4 metrik statistik, dan slider filter; menggeser slider memperbarui graf secara *real-time* | SVG tampil, jumlah "Koneksi Terdeteksi" berubah proporsional saat slider digeser; sistem tidak *crash* |
+| O | Pan dan Zoom Visualisasi Graf | *Normal* | *Scroll* mouse → memperbesar/perkecil tampilan (zoom terpusat pada posisi kursor); *drag* → menggeser area tampilan; klik tombol "↺ Reset" → kembali ke tampilan awal | Seluruh simpul yang semula terpotong dapat dilihat setelah pan/zoom; tombol Reset mengembalikan transformasi ke posisi semula |
 
 ## 3. Evaluasi Akurasi (Uji Validitas Algoritma)
 
