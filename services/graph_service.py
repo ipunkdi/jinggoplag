@@ -13,7 +13,7 @@ Desain:
 - Tooltip            = nama project lengkap (on-hover)
 
 Output akhir adalah string HTML yang siap di-render via
-`st.components.v1.html`, sehingga tidak membutuhkan library
+`st.iframe`, sehingga tidak membutuhkan library
 visualisasi tambahan (plotly, pyvis, dll.) di luar NetworkX.
 
 Menggunakan `seed=42` pada spring_layout agar tata letak graf
@@ -120,7 +120,7 @@ class GraphService:
             margin: Jarak minimum node dari tepi canvas (piksel).
 
         Returns:
-            String SVG siap di-render via st.components.v1.html.
+            String SVG siap di-render via st.iframe.
         """
         if not graph.nodes():
             return self._empty_svg(width, height)
@@ -132,7 +132,7 @@ class GraphService:
         parts: list = [
             self._svg_header(width, height),
             self._svg_defs(),
-            '<g id="graph-group">',   # ← semua edge + node di sini agar JS pan/zoom bisa menargetkan
+            '<g id="graph-group">',        # target JS pan/zoom (edge + node)
         ]
         parts.extend(self._render_edges(graph, canvas_pos))
         parts.extend(self._render_nodes(graph, canvas_pos, node_max_threshold))
