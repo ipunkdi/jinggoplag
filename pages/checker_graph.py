@@ -136,7 +136,7 @@ def render(navigate_to) -> None:
     # ── Render SVG graf dengan Pan & Zoom interaktif ───────────────────────────
     svg_html  = svc.render_svg(graph)
     full_html = _build_interactive_html(svg_html)
-    st.iframe(full_html, height=620, scrolling=False)
+    st.iframe(full_html, height=620)
 
     # ── Legenda node terisolasi ────────────────────────────────────────────────
     if stats["isolated_count"] > 0:
