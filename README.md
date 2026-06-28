@@ -251,7 +251,7 @@ Cakupan pengujian (55 *assertion*, 14 kelompok):
 | T13 | *Export* PDF kode berdampingan (*landscape*) — header `%PDF` valid dan ukuran berkas > 0 byte untuk laporan kode dengan *highlight* |
 | T14 | Visualisasi Graf — `GraphService` menghasilkan NetworkX Graph, statistik, dan SVG valid (ada `<circle>` dan `</svg>`) dari hasil nyata; graf kosong tidak *crash* |
 
-Detail metodologi pengujian (termasuk *black-box testing* 15 skenario A–O) ada di [`docs/TESTING.md`](docs/TESTING.md).
+Detail metodologi pengujian (termasuk *black-box testing* 15 *test case* TC-BB-01–TC-BB-15) ada di [`docs/TESTING.md`](docs/TESTING.md).
 
 ## Verifikasi Akurasi (Excel Gold Standard)
 
