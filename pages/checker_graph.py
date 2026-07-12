@@ -135,8 +135,17 @@ def render(navigate_to) -> None:
 
     # ── Render SVG graf dengan Pan & Zoom interaktif ───────────────────────────
     svg_html  = svc.render_svg(graph)
-    full_html = _build_interactive_html(svg_html)
-    st.iframe(full_html, height=620)
+
+    # Baca dimensi viewBox AKTUAL dari SVG yang dihasilkan (canvas sekarang
+    # dinamis — tumbuh sesuai jumlah node), lalu teruskan ke JS pan/zoom
+    # agar konversi koordinat mouse → SVG tetap akurat.
+    import re as _re
+    _vb = _re.search(r'viewBox="0 0 (\d+) (\d+)"', svg_html)
+    vw  = int(_vb.group(1)) if _vb else CANVAS_WIDTH
+    vh  = int(_vb.group(2)) if _vb else CANVAS_HEIGHT
+
+    full_html = _build_interactive_html(svg_html, vw, vh)
+    st.iframe(full_html, height=max(640, vh + 80))
 
     # ── Legenda node terisolasi ────────────────────────────────────────────────
     if stats["isolated_count"] > 0:
@@ -246,22 +255,24 @@ def _render_top_pairs_table(
         )
 
 
-def _build_interactive_html(svg_html: str) -> str:
+def _build_interactive_html(svg_html: str, vw: int = CANVAS_WIDTH, vh: int = CANVAS_HEIGHT) -> str:
     """
     Bungkus SVG dalam dokumen HTML penuh dengan JavaScript pan dan zoom.
 
+    Args:
+        svg_html: Output dari GraphService.render_svg().
+        vw:       Lebar viewBox SVG aktual (dibaca dari tag <svg viewBox>).
+        vh:       Tinggi viewBox SVG aktual.
+
     Fitur:
-    - Scroll mouse → zoom in/out (terpusat pada posisi kursor)
-    - Drag (klik tahan + geser) → pan ke segala arah
-    - Tombol ↺ Reset → kembali ke tampilan awal
+    - Scroll mouse -> zoom in/out (terpusat pada posisi kursor)
+    - Drag (klik tahan + geser) -> pan ke segala arah
+    - Tombol Reset -> kembali ke tampilan awal
     - Legend tetap FIXED di sudut kanan bawah (tidak ikut pan/zoom)
 
-    Fungsi ini harus dipakai bersama graph_service.render_svg() yang
-    menghasilkan SVG dengan id='jinggo-graph' dan <g id='graph-group'>
-    sebagai container yang ditransformasi oleh JavaScript.
+    vw/vh harus sesuai viewBox SVG aktual agar konversi koordinat
+    mouse -> SVG akurat, terutama untuk canvas dinamis (n besar).
     """
-    vw = CANVAS_WIDTH
-    vh = CANVAS_HEIGHT
     return f"""<!DOCTYPE html>
 <html>
 <head>

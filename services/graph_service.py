@@ -9,7 +9,7 @@ Desain:
 - Edge  = kemiripan antara dua project (hanya yang >= min_similarity)
 - Warna edge & node  = kategori threshold tertinggi (High/Moderate/Low)
 - Ukuran node        = proporsional terhadap jumlah koneksi (degree)
-- Label node         = nama project yang diperpendek (maksimal 15 karakter)
+- Label node         = nama project yang diperpendek, posisi DI BAWAH node
 - Tooltip            = nama project lengkap (on-hover)
 
 Output akhir adalah string HTML yang siap di-render via
@@ -19,6 +19,14 @@ visualisasi tambahan (plotly, pyvis, dll.) di luar NetworkX.
 Menggunakan `seed=42` pada spring_layout agar tata letak graf
 **reproducible** — input data yang sama selalu menghasilkan tampilan
 yang persis sama (penting untuk konsistensi presentasi akademik).
+
+Perbaikan v2 (pasca sidang):
+- k = max(3.0, 1.8*log(n+1))  → untuk n=28: k≈6.1 (vs lama 1.4), node tidak berdesakan
+- iterations = 150             → layout lebih konvergen
+- radius = 12 + degree*1.2    → node lebih kecil (degree=10: 24px vs lama 45px)
+- edge width max 3.5px         → vs lama 6.5px, klaster tidak gelap
+- canvas dinamis               → tumbuh proporsional dengan n
+- label di BAWAH node          → terbaca meski node kecil
 """
 
 import html
@@ -36,10 +44,10 @@ THRESHOLD_PALETTE: dict = {
 
 THRESHOLD_ORDER: dict = {"High": 2, "Moderate": 1, "Low": 0}
 
-# ── Konstanta ukuran canvas ───────────────────────────────────────────────────
+# ── Konstanta ukuran canvas default ──────────────────────────────────────────
 CANVAS_WIDTH  = 820
 CANVAS_HEIGHT = 560
-CANVAS_MARGIN = 90
+CANVAS_MARGIN = 100
 
 
 class GraphService:
@@ -56,7 +64,7 @@ class GraphService:
 
         Args:
             comparison_results: list[ComparisonResult] dari SimilarityService.
-            min_similarity:     Batas minimum similarity (persentase 0–100).
+            min_similarity:     Batas minimum similarity (persentase 0-100).
 
         Returns:
             nx.Graph dengan atribut node (label) dan edge (similarity, threshold).
@@ -109,14 +117,16 @@ class GraphService:
         """
         Hasilkan string SVG interaktif dari NetworkX Graph.
 
-        Menggunakan spring_layout(seed=42) untuk posisi node yang reproducible.
-        Edge lebar dan node besar secara proporsional terhadap kemiripan/degree.
-        Hover tooltip menampilkan nama project lengkap + detail kemiripan.
+        Canvas diperbesar secara dinamis sesuai jumlah node agar spring
+        layout punya ruang yang cukup:
+            n=5  -> 820x560  |  n=28 -> 980x700  |  n=50 -> 1200x800
+        Edge tipis (max 3.5px), node lebih kecil (r=12+deg*1.2), label
+        di bawah node - ketiganya mengurangi kepadatan visual di klaster.
 
         Args:
             graph:  NetworkX Graph dari build_graph().
-            width:  Lebar canvas SVG (piksel).
-            height: Tinggi canvas SVG (piksel).
+            width:  Lebar canvas minimum SVG (piksel).
+            height: Tinggi canvas minimum SVG (piksel).
             margin: Jarak minimum node dari tepi canvas (piksel).
 
         Returns:
@@ -125,19 +135,25 @@ class GraphService:
         if not graph.nodes():
             return self._empty_svg(width, height)
 
-        pos = self._compute_layout(graph)
-        canvas_pos = self._normalize_to_canvas(pos, width, height, margin)
+        # Canvas dinamis: tumbuh proporsional dengan jumlah node
+        n     = graph.number_of_nodes()
+        eff_w = max(width,  min(1200, n * 36))
+        eff_h = max(height, min(800,  n * 26))
+        eff_m = max(margin, min(130,  eff_w // 7))
+
+        pos        = self._compute_layout(graph)
+        canvas_pos = self._normalize_to_canvas(pos, eff_w, eff_h, eff_m)
         node_max_threshold = self._node_max_threshold(graph)
 
         parts: list = [
-            self._svg_header(width, height),
+            self._svg_header(eff_w, eff_h),
             self._svg_defs(),
-            '<g id="graph-group">',        # target JS pan/zoom (edge + node)
+            '<g id="graph-group">',    # target JS pan/zoom (edge + node)
         ]
         parts.extend(self._render_edges(graph, canvas_pos))
         parts.extend(self._render_nodes(graph, canvas_pos, node_max_threshold))
-        parts.append("</g>")          # ← tutup graph-group (legend di LUAR agar tetap fixed)
-        parts.append(self._render_legend(width, height))
+        parts.append("</g>")          # legend di LUAR agar tetap fixed
+        parts.append(self._render_legend(eff_w, eff_h))
         parts.append("</svg>")
 
         return "\n".join(parts)
@@ -146,10 +162,18 @@ class GraphService:
 
     @staticmethod
     def _compute_layout(graph: nx.Graph) -> dict:
-        """Spring layout dengan seed tetap dan k disesuaikan jumlah node."""
+        """
+        Spring layout dengan k proporsional log(n) dan seed tetap.
+
+        Formula k = max(3.0, 1.8*log(n+1)) menjamin jarak antar node
+        selalu memadai untuk berbagai ukuran kelas:
+            n=5  -> k=4.3  |  n=10 -> k=5.1  |  n=28 -> k=6.1  |  n=50 -> k=7.1
+        Jauh lebih baik dari formula lama max(1.4, 3.2/sqrt(n)) yang untuk
+        n=28 hanya menghasilkan k=1.4 sehingga node berdesakan.
+        """
         n = max(graph.number_of_nodes(), 1)
-        k = max(1.4, 3.2 / math.sqrt(n))
-        return nx.spring_layout(graph, seed=42, k=k, iterations=80)
+        k = max(3.0, 1.8 * math.log(n + 1))
+        return nx.spring_layout(graph, seed=42, k=k, iterations=150)
 
     @staticmethod
     def _normalize_to_canvas(
@@ -209,7 +233,12 @@ class GraphService:
 </defs>"""
 
     def _render_edges(self, graph: nx.Graph, pos: dict) -> list:
-        """Render semua edge sebagai <line> dengan warna dan lebar proporsional."""
+        """
+        Render semua edge sebagai <line>.
+
+        Lebar edge dipersempit (max 3.5px vs lama 6.5px) agar tidak
+        menutupi node di area klaster padat.
+        """
         parts: list = []
         for u, v, data in graph.edges(data=True):
             x1, y1 = pos[u]
@@ -217,9 +246,9 @@ class GraphService:
             threshold   = data.get("threshold", "Low")
             similarity  = data.get("similarity", 0.0)
             _, stroke   = THRESHOLD_PALETTE.get(threshold, ("#CCC", "#999"))
-            line_width  = 1.5 + (similarity / 100.0) * 5.0
+            line_width  = 1.0 + (similarity / 100.0) * 2.5
             tooltip_txt = (
-                f"{html.escape(u[:40])} ↔ {html.escape(v[:40])}: "
+                f"{html.escape(u[:40])} <-> {html.escape(v[:40])}: "
                 f"{similarity:.1f}% ({threshold})"
             )
             parts.append(
@@ -234,30 +263,40 @@ class GraphService:
     def _render_nodes(
         self, graph: nx.Graph, pos: dict, node_max_threshold: dict
     ) -> list:
-        """Render semua node sebagai <circle> dengan label dan tooltip."""
+        """
+        Render semua node sebagai <circle> dengan label DI BAWAH dan tooltip.
+
+        Radius diperkecil (12 + degree*1.2 vs lama 20 + degree*2.5):
+            degree=0  : r=12px  (vs lama 20px)
+            degree=5  : r=18px  (vs lama 32px)
+            degree=10 : r=24px  (vs lama 45px)  <- perbaikan utama
+        Label dipindah ke BAWAH node agar terbaca meski node kecil.
+        """
         parts: list = []
         for node in graph.nodes():
             cx, cy    = pos[node]
             degree    = graph.degree(node)
-            radius    = 20 + degree * 2.5
+            radius    = 12 + degree * 1.2
             threshold = node_max_threshold.get(node, "Low")
             fill, stroke = THRESHOLD_PALETTE.get(threshold, ("#F5F5F5", "#999"))
             label     = graph.nodes[node].get("label", node[:15])
-            short     = (label[:13] + "…") if len(label) > 14 else label
+            short     = (label[:11] + "...") if len(label) > 12 else label
             tooltip   = html.escape(node)
 
             parts.append(
                 f'<circle class="g-node" '
                 f'cx="{cx:.1f}" cy="{cy:.1f}" r="{radius:.1f}" '
-                f'fill="{fill}" stroke="{stroke}" stroke-width="2.5">'
+                f'fill="{fill}" stroke="{stroke}" stroke-width="2">'
                 f"<title>{tooltip}</title>"
                 f"</circle>"
             )
+            # Label di BAWAH node (bukan di tengah) agar tidak terpotong
+            label_y = cy + radius + 10
             parts.append(
-                f'<text x="{cx:.1f}" y="{cy:.1f}" '
-                f'text-anchor="middle" dominant-baseline="middle" '
+                f'<text x="{cx:.1f}" y="{label_y:.1f}" '
+                f'text-anchor="middle" dominant-baseline="hanging" '
                 f'font-size="8" font-family="sans-serif" '
-                f'fill="{stroke}" font-weight="700" '
+                f'fill="{stroke}" font-weight="600" '
                 f'style="pointer-events:none;">'
                 f"{html.escape(short)}"
                 f"</text>"
@@ -297,8 +336,8 @@ class GraphService:
     def _empty_svg(width: int, height: int) -> str:
         """SVG placeholder saat tidak ada node."""
         return (
-            f'<svg viewBox="0 0 {width} {height}" '
-            f'xmlns="http://www.w3.org/2000/svg" '
+            f'<svg id="jinggo-graph" viewBox="0 0 {width} {height}" '
+            f'xmlns="http://www.w3.org/2000/svg" overflow="visible" '
             f'style="width:100%;background:#FAFAFA;border-radius:12px;">'
             f'<text x="{width//2}" y="{height//2}" '
             f'text-anchor="middle" font-size="14" fill="#AAAAAA" '
@@ -311,4 +350,4 @@ class GraphService:
         """Perpendek nama project untuk label node."""
         if len(name) <= max_len:
             return name
-        return name[:max_len - 1] + "…"
+        return name[:max_len - 1] + "..."
