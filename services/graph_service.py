@@ -311,10 +311,11 @@ class GraphService:
             ("Moderate", "#E65100", "#FFE0B2"),
             ("Low",      "#2E7D32", "#C8E6C9"),
         ]
-        lx = width - 130
-        ly = height - 90
+        lx = width - 138
+        ly = height - 130   # dinaikkan 40px (dari -90) agar item Low tidak
+                             # terpotong saat SVG width:100% memperbesar tampilan
         parts = [
-            f'<rect x="{lx - 8}" y="{ly - 14}" width="122" height="84" '
+            f'<rect x="{lx - 8}" y="{ly - 14}" width="128" height="94" '
             f'rx="6" fill="white" stroke="#DDDDDD" stroke-width="1"/>',
             f'<text x="{lx}" y="{ly}" font-size="8.5" font-weight="700" '
             f'font-family="sans-serif" fill="#444">Kemiripan</text>',

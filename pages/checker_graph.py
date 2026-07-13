@@ -14,6 +14,7 @@ Akses: tombol "📊 Graf Kemiripan" di halaman Comparisons (Step 2).
 Kembali: tombol "← Kembali ke Comparisons" atau navbar Plagiarism Checker.
 """
 
+import re
 import streamlit as st
 
 from components.step_indicator import render_step_indicator
@@ -136,16 +137,16 @@ def render(navigate_to) -> None:
     # ── Render SVG graf dengan Pan & Zoom interaktif ───────────────────────────
     svg_html  = svc.render_svg(graph)
 
-    # Baca dimensi viewBox AKTUAL dari SVG yang dihasilkan (canvas sekarang
-    # dinamis — tumbuh sesuai jumlah node), lalu teruskan ke JS pan/zoom
-    # agar konversi koordinat mouse → SVG tetap akurat.
-    import re as _re
-    _vb = _re.search(r'viewBox="0 0 (\d+) (\d+)"', svg_html)
+    # Baca dimensi viewBox AKTUAL dari SVG yang dihasilkan (canvas dinamis)
+    # agar konversi koordinat mouse → SVG di JavaScript tetap akurat.
+    _vb = re.search(r'viewBox="0 0 (\d+) (\d+)"', svg_html)
     vw  = int(_vb.group(1)) if _vb else CANVAS_WIDTH
     vh  = int(_vb.group(2)) if _vb else CANVAS_HEIGHT
 
     full_html = _build_interactive_html(svg_html, vw, vh)
-    st.iframe(full_html, height=max(640, vh + 80))
+    # Tinggi iframe = vh + 120px buffer untuk mengakomodasi skala SVG
+    # (SVG width:100% membesar di layar lebar, mendorong konten ke bawah)
+    st.iframe(full_html, height=max(660, vh + 120))
 
     # ── Legenda node terisolasi ────────────────────────────────────────────────
     if stats["isolated_count"] > 0:
