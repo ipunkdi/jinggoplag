@@ -144,9 +144,13 @@ def render(navigate_to) -> None:
     vh  = int(_vb.group(2)) if _vb else CANVAS_HEIGHT
 
     full_html = _build_interactive_html(svg_html, vw, vh)
-    # Tinggi iframe = vh + 120px buffer untuk mengakomodasi skala SVG
-    # (SVG width:100% membesar di layar lebar, mendorong konten ke bawah)
-    st.iframe(full_html, height=max(660, vh + 120))
+    # height="content": st.iframe MENGUKUR tinggi konten HTML yang
+    # sesungguhnya setelah dirender (bukan menebak dari Python), sehingga
+    # SVG bebas mengisi penuh lebar container tanpa terpotong ATAU
+    # menyisakan ruang kosong -- menggantikan pendekatan lama yang
+    # menghitung tinggi iframe manual (height=max(660, vh+120)), yang
+    # jadi sumber masalah cropping/gap yang berulang kali muncul.
+    st.iframe(full_html, height="content")
 
     # ── Legenda node terisolasi ────────────────────────────────────────────────
     if stats["isolated_count"] > 0:
