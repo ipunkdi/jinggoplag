@@ -163,17 +163,35 @@ class GraphService:
     @staticmethod
     def _compute_layout(graph: nx.Graph) -> dict:
         """
-        Spring layout dengan k proporsional log(n) dan seed tetap.
+        Spring layout berbobot: similarity tinggi = jarak lebih dekat.
 
-        Formula k = max(3.0, 1.8*log(n+1)) menjamin jarak antar node
-        selalu memadai untuk berbagai ukuran kelas:
-            n=5  -> k=4.3  |  n=10 -> k=5.1  |  n=28 -> k=6.1  |  n=50 -> k=7.1
-        Jauh lebih baik dari formula lama max(1.4, 3.2/sqrt(n)) yang untuk
-        n=28 hanya menghasilkan k=1.4 sehingga node berdesakan.
+        MASALAH SEBELUMNYA: spring_layout tanpa weight memperlakukan semua
+        edge dengan kekuatan yang sama — layout hanya mencerminkan topologi
+        (siapa terhubung ke siapa), bukan kekuatan kemiripan.
+
+        SOLUSI: buat graf sementara dengan atribut 'weight' = similarity/100.
+        Dalam algoritma Fruchterman-Reingold, gaya tarik proporsional dengan
+        bobot: F_attr = weight * d^2 / k. Sehingga:
+            similarity=90% (weight=0.90) → pegas kuat → node lebih dekat
+            similarity=30% (weight=0.30) → pegas lemah → node lebih jauh
+
+        Bobot dinormalisasi ke [0.0, 1.0] untuk menghindari ketidakstabilan
+        numerik dari nilai similarity mentah (30–100).
+
+        k = max(3.0, 1.8*log(n+1)):
+            n=5 -> 4.3  |  n=10 -> 5.1  |  n=28 -> 6.1  |  n=50 -> 7.1
         """
         n = max(graph.number_of_nodes(), 1)
         k = max(3.0, 1.8 * math.log(n + 1))
-        return nx.spring_layout(graph, seed=42, k=k, iterations=150)
+
+        # Graf sementara dengan bobot ternormalisasi — TIDAK memodifikasi
+        # graph asli yang masih dipakai untuk render edge dan statistik.
+        g_w = nx.Graph()
+        g_w.add_nodes_from(graph.nodes(data=True))
+        for u, v, data in graph.edges(data=True):
+            g_w.add_edge(u, v, weight=data.get("similarity", 50) / 100.0)
+
+        return nx.spring_layout(g_w, seed=42, k=k, iterations=200)
 
     @staticmethod
     def _normalize_to_canvas(
